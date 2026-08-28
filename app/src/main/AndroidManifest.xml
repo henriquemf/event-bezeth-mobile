@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Sem backup: o que o app guarda no aparelho e (a) um cache do que ja
+         esta no servidor e (b) o token de acesso, que vale noventa dias e nao
+         e revogavel um a um.
+
+         Com `allowBackup="true"` esse token sai do aparelho: entra no backup
+         automatico do Google e, em muitos aparelhos, num `adb backup`. Um
+         token roubado assim vale ate vencer, e nao ha como cancelar so ele:
+         o botao de emergencia e trocar a SECRET_KEY do servidor, que derruba
+         a sessao de todo mundo.
+
+         O que se perde desligando: nada. Restaurar o aparelho pede um login,
+         e a primeira sincronizacao traz tudo de volta. -->
+    <application
+        android:allowBackup="false"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Beazeth">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Beazeth"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema so do arranque: o Compose assume assim que a Activity monta.
+         Herda de NoActionBar porque a barra de titulo do Android apareceria
+         por cima da interface do Compose. -->
+    <style name="Theme.Beazeth" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/fundo</item>
+    </style>
+</resources>
