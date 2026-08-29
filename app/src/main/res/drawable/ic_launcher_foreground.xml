@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A frente do icone: a bolinha de degrade e o sorriso, os mesmos de
+    `static/icon-512.png` no site.
+
+    ~~ Por que vetor, e nao PNG ~~
+
+    O icone do app era so PNG legado (`mipmap-*/ic_launcher.png`), e o Android
+    8 em diante trata icone legado como coisa de outra epoca: recorta num
+    circulo, encolhe e poe fundo branco em volta. No meio de uma gaveta de
+    icones adaptativos, o nosso aparecia pequeno e desbotado dentro de uma
+    bolha branca.
+
+    ~~ A boca veio do PNG, e nao do `icon.svg` ~~
+
+    Os dois estao no site e nao desenham a mesma coisa. O `icon.svg` traz
+    `M40 82 c8-8 40-8 48 0`: com y crescendo para baixo, pontos de controle
+    ACIMA das pontas curvam a linha para cima, o que da uma boca virada, de
+    tristeza. O PNG, que e o que todo mundo ve, tem sorriso. Aqui vale o PNG,
+    medido pixel a pixel: banda de 8 de espessura, pontas em x 40 e 88, fundo
+    da curva em y 109, no quadro de 128.
+
+    ~~ A conta das medidas ~~
+
+    A tela do icone adaptativo tem 108x108, das quais o launcher so garante
+    mostrar as 72 do meio, e a zona segura e o circulo de 66 no centro (raio
+    33 a partir de 54,54). Fora dela, a ponta pode ser cortada.
+
+    A arte do site vive num quadro de 128, onde o conteudo (bolinha + boca)
+    ocupa 48x82 centrado em (64,68). Trazer para ca e uma conta so:
+    `novo = (velho - centro) * 0.80 + 54`.
+
+    O fator e 0.80 porque quem manda nele sao os dois extremos verticais, o
+    alto da bolinha e o fundo do sorriso, a 41 do centro no quadro de 128:
+    41 x 0.80 = 32,8, um fio dentro do raio de 33 da zona segura. Com mais que
+    isso, o recorte redondo do launcher come a testa da bolinha.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- A bolinha: circulo de raio 17,6 em (54; 38,8).
+
+         O degrade vai de canto a canto da caixa do proprio circulo, que e o
+         que `objectBoundingBox` faz no SVG: comeca no rosa da variavel
+         `accent` e termina no azul da `blue-soft`. -->
+    <path android:pathData="M54,38.8 m-17.6,0 a17.6,17.6 0 1,1 35.2,0 a17.6,17.6 0 1,1 -35.2,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="36.4"
+                android:startY="21.2"
+                android:endX="71.6"
+                android:endY="56.4">
+                <item android:offset="0" android:color="#FFFF78B2" />
+                <item android:offset="1" android:color="#FF7EC8FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- O sorriso: curva de (38,74) a (70,74) que desce ate 83,6 no meio.
+         Traco redondo nas pontas; cortado reto, a curva termina em farpa. -->
+    <path
+        android:pathData="M38,74 C38,86.8 70,86.8 70,74"
+        android:strokeColor="#FFFFD8EB"
+        android:strokeWidth="6.4"
+        android:strokeLineCap="round" />
+</vector>

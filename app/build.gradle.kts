@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -21,8 +23,42 @@ android {
         // java.time, usado nas datas ISO que a API devolve.
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // `versionCode` e o numero que o Android compara para decidir se um
+        // `.apk` e mais novo que o instalado: ele so sobe, e sobe UMA vez por
+        // `.apk` que sai daqui para a mao de alguem. `versionName` e o que
+        // aparece nos ajustes, e e para gente ler.
+        //
+        // `empacotar.ps1 -Versao x.y.z` mexe nos dois de uma vez.
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+
+    // ------------------------------------------------------------ assinatura
+    //
+    // A chave nao mora no repositorio (o `.gitignore` barra `*.keystore`) e a
+    // senha tampouco: as duas vem de `keystore.properties`, que fica so nesta
+    // maquina. Ha um `keystore.properties.exemplo` versionado dizendo o que
+    // preencher.
+    //
+    // Sem esse arquivo o build de release SAI, so que sem assinatura -- e um
+    // `.apk` sem assinatura nao instala em aparelho nenhum. Quem avisa e o
+    // `empacotar.ps1`, antes de comecar, em vez de entregar no fim um arquivo
+    // que nao serve.
+    val arquivoDaChave = rootProject.file("keystore.properties")
+    val chave = Properties().apply {
+        if (arquivoDaChave.exists()) arquivoDaChave.inputStream().use { load(it) }
+    }
+
+    signingConfigs {
+        if (chave.isNotEmpty()) {
+            create("release") {
+                // Caminho absoluto, ou relativo a raiz do repositorio.
+                storeFile = rootProject.file(chave.getProperty("storeFile"))
+                storePassword = chave.getProperty("storePassword")
+                keyAlias = chave.getProperty("keyAlias")
+                keyPassword = chave.getProperty("keyPassword")
+            }
+        }
     }
 
     // Contra qual servidor o app fala.
@@ -60,6 +96,7 @@ android {
             )
         }
         release {
+            signingConfig = signingConfigs.findByName("release")
             buildConfigField("String", "API_BASE", "\"$apiBase\"")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
             // O tree-shaking do Android. Estava desligado, e o `.apk` levava

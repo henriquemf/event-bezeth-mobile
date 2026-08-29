@@ -3,4 +3,6 @@
     <!-- A mesma cor de fundo do tema padrao do site: evita um flash branco entre o
          arranque do Android e a primeira pintura do Compose. -->
     <color name="fundo">#FFF1F7</color>
+    <!-- O fundo do icone: o mesmo `#2a1735` da placa do `icon.svg` do site. -->
+    <color name="icone_fundo">#2A1735</color>
 </resources>

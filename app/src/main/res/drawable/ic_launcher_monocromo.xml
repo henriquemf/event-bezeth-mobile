@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A versao de uma cor so, para o "icone tematico" do Android 13 em diante:
+    com "icone com o tema do papel de parede" ligado, o sistema ignora as cores
+    do app e pinta ESTA silhueta com as dele.
+
+    Por isso aqui nao ha degrade nem rosa; a cor e irrelevante, o sistema so
+    olha o desenho e o que e transparente. Sem esta camada, o Android tematiza
+    sozinho reduzindo a arte inteira a um borrao, e a bolinha e o sorriso viram
+    uma mancha so.
+
+    Mesma geometria de `ic_launcher_foreground`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M54,38.8 m-17.6,0 a17.6,17.6 0 1,1 35.2,0 a17.6,17.6 0 1,1 -35.2,0"
+        android:fillColor="#FF000000" />
+
+    <path
+        android:pathData="M38,74 C38,86.8 70,86.8 70,74"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="6.4"
+        android:strokeLineCap="round" />
+</vector>

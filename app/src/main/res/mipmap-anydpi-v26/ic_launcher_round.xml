@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    O mesmo icone, para quem pede `roundIcon`.
+
+    Um icone adaptativo ja se recorta em qualquer formato, entao o redondo
+    nao precisa ser um desenho diferente - mas ha launcher que pede
+    `roundIcon` explicitamente e cai no PNG legado se nao achar.
+
+    O icone adaptativo: o launcher recorta as duas camadas no formato que ele
+    usa (circulo, quadrado arredondado, gota) e desliza uma sobre a outra
+    quando o icone se mexe.
+
+    O fundo e cor chapada, e nao a placa arredondada do `icon.svg` do site: o
+    recorte redondo ja e do launcher, e desenhar UMA placa por baixo dele
+    deixava um halo escuro sobrando fora da curva.
+
+    `mipmap-anydpi-v26` e nao `drawable`: icone de app mora em `mipmap` porque
+    o launcher pode pedir uma densidade maior que a da tela, e o `mipmap`
+    sobrevive ao filtro de densidade que o build aplica ao `drawable`. O
+    sufixo `-v26` faz o Android 7 e anteriores cairem no PNG legado ao lado -
+    aqui `minSdk` e 26, entao na pratica todo aparelho recebe este.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/icone_fundo" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monocromo" />
+</adaptive-icon>

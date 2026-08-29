@@ -172,6 +172,55 @@ fontes, que existem justamente para o app não parecer outro produto.
 
 ---
 
+## Gerar o .apk para instalar no tablet
+
+```powershell
+.\empacotar.ps1
+```
+
+Sai `dist\EventBeazeth-<versão>.apk`, assinado e pronto para mandar. Para subir
+a versão junto, `.\empacotar.ps1 -Versao 1.1.0`; para instalar no aparelho
+conectado antes de mandar, acrescente `-Instalar`.
+
+O script existe porque quase toda etapa de "gerar o `.apk`" falha calada — o
+build termina bem e o problema só aparece no aparelho de quem recebeu:
+
+| Passo | O que falha sem ele |
+| --- | --- |
+| achar o JDK 21 | o Gradle para com um erro que não diz qual Java ele queria |
+| exigir `keystore.properties` | o `.apk` sai **sem assinatura**, e não instala em lugar nenhum |
+| conferir que o `apiBase` é `https` | o `.apk` instala, abre, e só o login falha — sem dizer por quê |
+| conferir a assinatura do arquivo **pronto** | assinado com a chave de depuração, ele instala hoje e nunca aceita atualização |
+| nomear com a versão | três `app-release.apk` na pasta de downloads e ninguém sabe qual é qual |
+
+### A chave
+
+A assinatura é o que permite **atualizar por cima**. O Android só aceita uma
+versão nova se ela vier assinada com a mesma chave da instalada; assinatura
+diferente é, para ele, outro aplicativo. Perder a chave não tem conserto: quem
+já tem o app teria que desinstalar, e o que estiver só no aparelho (post-it
+escrito offline) some junto.
+
+Por isso ela não está aqui. `keystore.properties` diz onde ela está e qual a
+senha, e é ignorado pelo git; ao lado dele há um `keystore.properties.exemplo`
+versionado, que explica o que preencher sem guardar o segredo. É a mesma chave
+que assina o app antigo (o TWA), na pasta vizinha — uma chave pode assinar dois
+apps, e é um arquivo insubstituível para guardar em vez de dois.
+
+### O ícone
+
+Adaptativo, em `mipmap-anydpi-v26/` — fundo, frente e a camada monocromática
+que o Android 13 tinge com as cores do papel de parede. A arte é a do site
+(`static/icon-512.png`), redesenhada em vetor: a bolinha de degradê e o sorriso,
+encolhidos a 80% para caber na zona segura de 66 dp, que é o que o launcher
+garante não cortar no recorte redondo.
+
+Antes havia só o PNG legado, e o Android 8 em diante trata ícone legado como
+peça de museu: recorta num círculo, encolhe e põe fundo branco em volta. No meio
+da gaveta o app aparecia pequeno e desbotado dentro de uma bolha branca.
+
+---
+
 ## Mapa do projeto
 
 ```

@@ -14,6 +14,13 @@ app/build/
 *.keystore
 *.jks
 
+# Onde a chave esta e qual a senha dela. O `.exemplo` ao lado, esse sim, e
+# versionado: diz o que preencher sem guardar o segredo.
+keystore.properties
+
+# Os .apk prontos para mandar. Sai um por versao, e nenhum deles e fonte.
+dist/
+
 # IDE
 .idea/
 *.iml
