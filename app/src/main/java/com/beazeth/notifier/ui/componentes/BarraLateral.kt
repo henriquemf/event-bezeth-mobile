@@ -261,7 +261,18 @@ fun BarraLateral(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
                 ) {
-                    Text(text = Destino.AGUA.icone, fontSize = 22.sp)
+                    // O copo do site (`glass('sm')`), e nao o emoji do menu: o
+                    // widget vizinho ja mostra a ampulheta de verdade, e a agua
+                    // era a unica que anunciava um desenho e entregava um
+                    // caractere.
+                    Copo(
+                        nivel = if (meta > 0) {
+                            (copos.toFloat() / meta).coerceAtMost(1f)
+                        } else {
+                            0f
+                        },
+                        largura = 26.dp,
+                    )
                     Column {
                         Text(
                             text = "$copos de $meta",

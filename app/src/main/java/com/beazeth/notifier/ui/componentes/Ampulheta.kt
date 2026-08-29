@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.beazeth.notifier.ui.theme.Doce
+import com.beazeth.notifier.ui.theme.misturar
 
 /**
  * A ampulheta do Pomodoro, igual a de `css/widgets/pomodoro.css`.
@@ -187,14 +188,6 @@ fun Ampulheta(
         }
     }
 }
-
-/** O `color-mix(in srgb, a X%, b)` do CSS: [fracaoDeA] de `a`, o resto de `b`. */
-private fun misturar(a: Color, b: Color, fracaoDeA: Float): Color = Color(
-    red = a.red * fracaoDeA + b.red * (1 - fracaoDeA),
-    green = a.green * fracaoDeA + b.green * (1 - fracaoDeA),
-    blue = a.blue * fracaoDeA + b.blue * (1 - fracaoDeA),
-    alpha = a.alpha * fracaoDeA + b.alpha * (1 - fracaoDeA),
-)
 
 /** Um `DrawScope` para desenhar o anel do mostrador. Fica aqui para a tela do
  *  Pomodoro nao precisar repetir a conta do arco. */
