@@ -336,7 +336,11 @@ private fun BlocoNaGrade(
     val tato = LocalHapticFeedback.current
     val densidade = LocalDensity.current
 
-    val duracao = (bloco.endMinute - bloco.startMinute).coerceAtLeast(GRADE)
+    // A duracao real, sem piso de meia grade: um bloco de 5 minutos agora
+    // existe, e desenha-lo como se tivesse 15 o faria invadir o vizinho e
+    // desmentir o proprio rotulo. Quem garante que ele continua tocavel e o
+    // piso de 16 dp da ALTURA, que e o que o dedo precisa -- e nao o dado.
+    val duracao = (bloco.endMinute - bloco.startMinute).coerceAtLeast(1)
     val larguraDaTrilha = larguraDaColuna / item.trilhas
     val altura = (alturaDaHora * (duracao / 60f)).coerceAtLeast(16.dp)
 

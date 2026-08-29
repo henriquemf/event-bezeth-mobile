@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +35,7 @@ import com.beazeth.notifier.ui.componentes.AvisoDeErro
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CampoDoce
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.EscolhaDeHora
 import com.beazeth.notifier.ui.componentes.SeletorEmCaixa
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
@@ -51,10 +50,12 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
  * prontas no repositorio e nao tinham quem as chamasse; foi assim que o
  * auditor de codigo morto encontrou o buraco.
  *
- * **A grade e de 15 minutos, e o app arredonda antes de mandar.** O servidor
- * tambem arredonda (`parse_block_payload`), mas de la isso volta como uma
- * mudanca silenciosa: a pessoa marca 10:07 e ve 10:00 aparecer sem explicacao.
- * Arredondar aqui faz o formulario mostrar o que vai ser gravado.
+ * **A hora escolhida aqui vale como foi escolhida.** A grade de 15 minutos
+ * existe para o ARRASTE, onde o dedo nao tem precisao de minuto; num relogio em
+ * que se aponta o minuto exato, arredondar e desfazer o que a pessoa acabou de
+ * fazer -- 12:20 virava 12:15 na frente dela. O servidor tambem parou de
+ * arredondar (`parse_block_payload`), entao o que o formulario mostra e o que
+ * fica gravado.
  *
  * **Fim antes do inicio nao e erro, e engano comum.** Quem escolhe 14:00-13:00
  * quase sempre queria 13:00-14:00 e mexeu no campo errado. O formulario avisa
@@ -210,8 +211,10 @@ internal fun EditorDeBloco(
                         texto = "Salvar",
                         aoTocar = {
                             val limpo = titulo.trim()
-                            val comeco = arredondar(inicio)
-                            val termino = arredondar(fim)
+                            // Sem arredondar: o relogio ja devolveu o minuto
+                            // exato, e o que o campo mostra e o que vai.
+                            val comeco = inicio.coerceIn(0, MINUTOS_DO_DIA - 1)
+                            val termino = fim.coerceIn(0, MINUTOS_DO_DIA)
                             when {
                                 limpo.isEmpty() ->
                                     aviso = "Informe o título do bloco."
@@ -279,25 +282,21 @@ internal fun EditorDeBloco(
         )
         Dialog(onDismissRequest = { escolhendo = null }) {
             CartaoDaTela(titulo = if (alvo == "inicio") "Início" else "Fim") {
-                TimePicker(
-                    state = estado,
-                    colors = TimePickerDefaults.colors(
-                        selectorColor = cores.destaque,
-                        containerColor = cores.superficie,
-                        periodSelectorSelectedContainerColor = cores.destaque.copy(alpha = 0.2f),
-                        timeSelectorSelectedContainerColor = cores.destaque.copy(alpha = 0.2f),
-                    ),
-                )
+                EscolhaDeHora(estado = estado)
                 BotaoPrimario(
                     texto = "Pronto",
                     aoTocar = {
-                        val escolhido = arredondar(estado.hour * 60 + estado.minute)
+                        val escolhido = estado.hour * 60 + estado.minute
                         if (alvo == "inicio") {
                             inicio = escolhido
                             // Mover o inicio arrasta o fim junto, mantendo a
                             // duracao. Sem isto, adiantar um bloco de uma hora
                             // exigiria mexer nos dois campos -- e esquecer o
                             // segundo da um bloco de duracao negativa.
+                            //
+                            // Os 15 minutos aqui sao um PADRAO, nao uma regra:
+                            // so aparecem quando o fim ficou para tras e alguem
+                            // precisa de um valor qualquer no lugar dele.
                             if (fim <= escolhido) {
                                 fim = (escolhido + GRADE).coerceAtMost(MINUTOS_DO_DIA)
                             }

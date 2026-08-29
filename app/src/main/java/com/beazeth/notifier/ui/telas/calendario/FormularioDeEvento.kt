@@ -24,8 +24,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -45,6 +43,7 @@ import com.beazeth.notifier.ui.componentes.AvisoDeErro
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CampoDoce
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.EscolhaDeHora
 import com.beazeth.notifier.ui.componentes.SeletorEmCaixa
 import com.beazeth.notifier.ui.telas.corDoHex
 import com.beazeth.notifier.ui.theme.Doce
@@ -243,15 +242,7 @@ internal fun FormularioDeEvento(
         )
         Dialog(onDismissRequest = { escolhendoHora = false }) {
             CartaoDaTela(titulo = "Hora") {
-                TimePicker(
-                    state = estado,
-                    colors = TimePickerDefaults.colors(
-                        selectorColor = cores.destaque,
-                        containerColor = cores.superficie,
-                        periodSelectorSelectedContainerColor = cores.destaque.copy(alpha = 0.2f),
-                        timeSelectorSelectedContainerColor = cores.destaque.copy(alpha = 0.2f),
-                    ),
-                )
+                EscolhaDeHora(estado = estado)
                 BotaoPrimario(
                     texto = "Pronto",
                     aoTocar = {
