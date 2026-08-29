@@ -57,6 +57,13 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
  * arredondar (`parse_block_payload`), entao o que o formulario mostra e o que
  * fica gravado.
  *
+ * **Os dias sao caixas que ligam e desligam, e nao uma escolha unica.** Aula de
+ * segunda, quarta e sexta e o caso comum, e ate aqui so havia dois extremos: um
+ * dia, ou "Rotina", que sao os sete. Cada dia marcado vira um bloco proprio --
+ * o primeiro fica com o bloco que estava sendo editado, os outros nascem. Sao
+ * linhas independentes depois disso: mover a de quarta nao mexe na de sexta, e
+ * e assim que se quer, porque a aula de quarta e que costuma mudar de sala.
+ *
  * **Fim antes do inicio nao e erro, e engano comum.** Quem escolhe 14:00-13:00
  * quase sempre queria 13:00-14:00 e mexeu no campo errado. O formulario avisa
  * em vez de gravar um bloco de duracao negativa que o servidor depois conserta
@@ -72,14 +79,16 @@ internal fun EditorDeBloco(
     rascunho: BlocoEntity,
     novo: Boolean,
     aoFechar: () -> Unit,
-    aoSalvar: (BlocoEntity) -> Unit,
+    /** Um bloco por dia marcado -- ver a doc acima. Chegam em ordem: o
+     *  primeiro carrega o id que estava sendo editado, os outros nascem. */
+    aoSalvar: (List<BlocoEntity>) -> Unit,
     aoApagar: () -> Unit,
 ) {
     val cores = Doce
 
     var titulo by remember { mutableStateOf(rascunho.title) }
     var notas by remember { mutableStateOf(rascunho.notes) }
-    var dia by remember { mutableIntStateOf(rascunho.dayOfWeek) }
+    var dias by remember { mutableStateOf(setOf(rascunho.dayOfWeek)) }
     var inicio by remember { mutableIntStateOf(rascunho.startMinute) }
     var fim by remember { mutableIntStateOf(rascunho.endMinute) }
     var cor by remember { mutableStateOf(rascunho.color) }
@@ -130,7 +139,7 @@ internal fun EditorDeBloco(
                     // pediria um dia que o servidor vai descartar.
                     if (!rotina) {
                         Text(
-                            text = "Dia",
+                            text = "Dias",
                             style = TipografiaBeazeth.labelLarge,
                             color = cores.tintaSuave,
                         )
@@ -141,11 +150,25 @@ internal fun EditorDeBloco(
                             for (indice in DIAS_CURTOS.indices) {
                                 EscolhaDeDia(
                                     rotulo = DIAS_CURTOS[indice],
-                                    ativo = indice == dia,
-                                    aoTocar = { dia = indice },
+                                    ativo = indice in dias,
+                                    aoTocar = {
+                                        dias = if (indice in dias) {
+                                            dias - indice
+                                        } else {
+                                            dias + indice
+                                        }
+                                        aviso = null
+                                    },
                                     modifier = Modifier.weight(1f),
                                 )
                             }
+                        }
+                        if (dias.size > 1) {
+                            Text(
+                                text = "Serão ${dias.size} blocos, um por dia.",
+                                style = TipografiaBeazeth.bodyMedium,
+                                color = cores.tintaSuave,
+                            )
                         }
                     }
 
@@ -215,24 +238,40 @@ internal fun EditorDeBloco(
                             // exato, e o que o campo mostra e o que vai.
                             val comeco = inicio.coerceIn(0, MINUTOS_DO_DIA - 1)
                             val termino = fim.coerceIn(0, MINUTOS_DO_DIA)
+                            // Rotina ja e "todos os dias" numa linha so --
+                            // `parse_block_payload` ignora o dia quando ela
+                            // esta ligada. Espalha-la pelos sete daria sete
+                            // blocos dizendo a mesma coisa.
+                            val alvos = if (rotina) listOf(0) else dias.sorted()
+
                             when {
                                 limpo.isEmpty() ->
                                     aviso = "Informe o título do bloco."
+
+                                alvos.isEmpty() ->
+                                    aviso = "Escolha pelo menos um dia."
 
                                 termino <= comeco ->
                                     aviso = "O fim precisa vir depois do início."
 
                                 else -> {
                                     aoSalvar(
-                                        rascunho.copy(
-                                            title = limpo,
-                                            notes = notas.trim(),
-                                            dayOfWeek = if (rotina) 0 else dia,
-                                            startMinute = comeco,
-                                            endMinute = termino,
-                                            color = cor,
-                                            isRoutine = rotina,
-                                        )
+                                        alvos.mapIndexed { posicao, diaAlvo ->
+                                            rascunho.copy(
+                                                // So o primeiro herda o id: os
+                                                // outros sao blocos novos, e id
+                                                // zero e como o repositorio
+                                                // sabe disso.
+                                                id = if (posicao == 0) rascunho.id else 0L,
+                                                title = limpo,
+                                                notes = notas.trim(),
+                                                dayOfWeek = diaAlvo,
+                                                startMinute = comeco,
+                                                endMinute = termino,
+                                                color = cor,
+                                                isRoutine = rotina,
+                                            )
+                                        }
                                     )
                                     aoFechar()
                                 }

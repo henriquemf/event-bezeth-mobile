@@ -23,8 +23,19 @@ class PlannerViewModel(app: Application) : AndroidViewModel(app) {
     fun apagar(bloco: BlocoEntity) = viewModelScope.launch { repo.apagarBloco(bloco.id) }
 
     /** Cria ou atualiza, pelo id: zero e o bloco que ainda nao existe. */
-    fun salvar(bloco: BlocoEntity) = viewModelScope.launch {
-        if (bloco.id == 0L) repo.criarBloco(bloco) else repo.atualizarBloco(bloco)
+    /**
+     * Grava os blocos que o formulario montou -- um por dia marcado.
+     *
+     * **Em serie, dentro de UMA corrotina.** `criarBloco` le o menor id da
+     * tabela para derivar o proximo provisorio negativo; duas criacoes em
+     * paralelo leriam o mesmo menor id e a segunda gravaria por cima da
+     * primeira. Um `launch` por bloco parecia inofensivo e perderia dois dos
+     * tres de uma aula de segunda, quarta e sexta.
+     */
+    fun salvar(blocos: List<BlocoEntity>) = viewModelScope.launch {
+        for (bloco in blocos) {
+            if (bloco.id == 0L) repo.criarBloco(bloco) else repo.atualizarBloco(bloco)
+        }
     }
 
     /**
@@ -39,10 +50,12 @@ class PlannerViewModel(app: Application) : AndroidViewModel(app) {
         val comeco = inicio.coerceIn(0, MINUTOS_DO_DIA - duracao)
         if (comeco == bloco.startMinute && dia == bloco.dayOfWeek) return
         salvar(
-            bloco.copy(
-                dayOfWeek = if (bloco.isRoutine) bloco.dayOfWeek else dia,
-                startMinute = comeco,
-                endMinute = comeco + duracao,
+            listOf(
+                bloco.copy(
+                    dayOfWeek = if (bloco.isRoutine) bloco.dayOfWeek else dia,
+                    startMinute = comeco,
+                    endMinute = comeco + duracao,
+                )
             )
         )
     }
