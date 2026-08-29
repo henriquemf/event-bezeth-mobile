@@ -36,6 +36,7 @@ class Preferencias(private val context: Context) {
     private val chavePomoMinutos = intPreferencesKey("pomo_minutos")
     private val chavePomoFimEm = longPreferencesKey("pomo_fim_em")
     private val chavePomoRestante = intPreferencesKey("pomo_restante")
+    private val chavePomoCreditado = longPreferencesKey("pomo_creditado")
 
     val tema: Flow<String> = context.prefsAparencia.data.map { it[chaveTema] ?: PALETA_PADRAO }
     val fonte: Flow<String> = context.prefsAparencia.data.map { it[chaveFonte] ?: FONTE_PADRAO }
@@ -70,6 +71,23 @@ class Preferencias(private val context: Context) {
     /** Segundos que faltavam quando alguem pausou. So vale com `pomoFimEm` zerado. */
     val pomoRestante: Flow<Int> = context.prefsAparencia.data.map {
         it[chavePomoRestante] ?: ((it[chavePomoMinutos] ?: 25) * 60)
+    }
+
+    /**
+     * O `pomoFimEm` do ultimo pomodoro que ja entrou na conta do perfil.
+     *
+     * Existe para o credito nao acontecer duas vezes. O momento em que um
+     * pomodoro termina nao e um evento que alguem receba: o app pode estar
+     * fechado, e quem descobre e a primeira tela que olhar para o relogio
+     * depois -- podendo ser duas ao mesmo tempo (a tela do pomodoro e o widget
+     * da lateral). Comparar com este carimbo faz o segundo a chegar nao ter o
+     * que fazer.
+     */
+    val pomoCreditado: Flow<Long> =
+        context.prefsAparencia.data.map { it[chavePomoCreditado] ?: 0L }
+
+    suspend fun marcarPomodoroCreditado(fimEm: Long) {
+        context.prefsAparencia.edit { it[chavePomoCreditado] = fimEm }
     }
 
     suspend fun salvarPomodoro(minutos: Int, fimEm: Long, restante: Int) {

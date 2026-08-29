@@ -18,6 +18,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,8 @@ import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.componentes.anelDoMostrador
 import com.beazeth.notifier.ui.componentes.janelaDeitada
+import com.beazeth.notifier.data.local.BancoLocal
+import com.beazeth.notifier.data.local.PomodoroEntity
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.Paleta
@@ -82,6 +85,14 @@ data class EstadoPomodoro(
     val minutos: Int = 25,
     val restante: Int = 25 * 60,
     val correndo: Boolean = false,
+    /**
+     * O instante em que a contagem termina, ou zero se estiver parada.
+     *
+     * Sai do DataStore junto com o resto e serve a quem CREDITA o pomodoro
+     * terminado: e a identidade daquele pomodoro -- ver
+     * `Preferencias.pomoCreditado`.
+     */
+    val fimEm: Long = 0L,
 ) {
     val total: Int get() = minutos * 60
 
@@ -119,15 +130,46 @@ internal fun estadoDoPomodoro(prefs: Preferencias): Flow<EstadoPomodoro> {
     ) { minutos, fimEm, guardado, _ ->
         if (fimEm > 0L) {
             val restante = segundosAte(fimEm)
-            EstadoPomodoro(minutos, restante, correndo = restante > 0)
+            EstadoPomodoro(minutos, restante, correndo = restante > 0, fimEm = fimEm)
         } else {
             EstadoPomodoro(minutos, guardado, correndo = false)
         }
     }
 }
 
+/**
+ * Anota um pomodoro que chegou ao fim, para a tela de perfil somar.
+ *
+ * **Ninguem avisa quando um pomodoro termina.** O contador e derivado do
+ * relogio: o app pode estar fechado na hora, e quem descobre e a primeira tela
+ * a olhar depois. Por isso o credito nao esta preso a um evento -- e uma
+ * pergunta que se faz sempre que o estado passa por zero, inclusive dois dias
+ * depois, ao reabrir o app.
+ *
+ * Chamada de tres lugares (a tela do pomodoro, a casca -- que esta em todas as
+ * outras telas -- e as proprias acoes de Começar e Zerar, que apagariam o
+ * instante antes de alguem olhar). Chamar demais nao custa: o carimbo em
+ * `pomoCreditado` faz da segunda em diante um retorno imediato, e a chave
+ * natural da tabela nao deixaria duplicar de qualquer forma.
+ */
+internal suspend fun creditarPomodoroTerminado(prefs: Preferencias, banco: BancoLocal) {
+    val fimEm = prefs.pomoFimEm.first()
+    if (fimEm <= 0L || System.currentTimeMillis() < fimEm) return
+    if (prefs.pomoCreditado.first() == fimEm) return
+
+    banco.pomodoros().gravar(
+        PomodoroEntity(terminadoEm = fimEm, minutos = prefs.pomoMinutos.first()),
+    )
+    prefs.marcarPomodoroCreditado(fimEm)
+}
+
 /** Começar/Pausar. Vale para a tela e para o widget da lateral. */
-internal suspend fun alternarPomodoro(prefs: Preferencias) {
+internal suspend fun alternarPomodoro(prefs: Preferencias, banco: BancoLocal) {
+    // Antes de mexer: se o que estava la ja tinha terminado, este toque e um
+    // recomeço -- e o instante antigo, que identifica o pomodoro cumprido, esta
+    // prestes a ser sobrescrito.
+    creditarPomodoroTerminado(prefs, banco)
+
     val minutos = prefs.pomoMinutos.first()
     val fimEm = prefs.pomoFimEm.first()
     val restante = if (fimEm > 0L) segundosAte(fimEm) else prefs.pomoRestante.first()
@@ -145,7 +187,8 @@ internal suspend fun alternarPomodoro(prefs: Preferencias) {
 }
 
 /** Zerar, de volta ao tempo cheio. */
-internal suspend fun zerarPomodoro(prefs: Preferencias) {
+internal suspend fun zerarPomodoro(prefs: Preferencias, banco: BancoLocal) {
+    creditarPomodoroTerminado(prefs, banco)
     val minutos = prefs.pomoMinutos.first()
     prefs.salvarPomodoro(minutos, 0L, minutos * 60)
 }
@@ -156,13 +199,17 @@ private fun segundosAte(instante: Long): Int =
 class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Preferencias(app)
+    private val banco = BancoLocal.obter(app)
 
     val estado = estadoDoPomodoro(prefs)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EstadoPomodoro())
 
-    fun alternar() = viewModelScope.launch { alternarPomodoro(prefs) }
+    fun alternar() = viewModelScope.launch { alternarPomodoro(prefs, banco) }
 
-    fun zerar() = viewModelScope.launch { zerarPomodoro(prefs) }
+    fun zerar() = viewModelScope.launch { zerarPomodoro(prefs, banco) }
+
+    /** Chamado quando a contagem chega a zero com a tela aberta. */
+    fun creditar() = viewModelScope.launch { creditarPomodoroTerminado(prefs, banco) }
 
     /** Trocar o tempo so vale com o timer parado; a tela nao oferece o
      *  contrario, mas o ViewModel nao confia nisso. */
@@ -178,6 +225,13 @@ fun PomodoroScreen(vm: PomodoroViewModel = viewModel()) {
     val estado by vm.estado.collectAsState()
     val cores = Doce
     val deitado = janelaDeitada()
+
+    // Chegou a zero com esta tela aberta: entra na conta do perfil na hora, sem
+    // esperar o proximo toque. A chave inclui o `fimEm` para o efeito rodar de
+    // novo no pomodoro seguinte, e nao uma vez so por visita.
+    LaunchedEffect(estado.fimEm, estado.restante == 0) {
+        if (estado.fimEm > 0L && estado.restante == 0) vm.creditar()
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),

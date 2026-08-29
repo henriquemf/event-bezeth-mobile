@@ -70,10 +70,21 @@ enum class Destino(
     TODO("todo", "✅", "To-do", "To-do", true),
     POMODORO("pomodoro", "🍎", "Pomodoro", "Pomodoro", true),
     AGUA("agua", "💧", "Beber água", "Água", true),
-    APARENCIA("aparencia", "🎨", "Aparência", "Tema", false);
+    APARENCIA("aparencia", "🎨", "Aparência", "Tema", false),
+
+    /**
+     * O perfil nao entra na lista de links da lateral: quem leva ate ele e o
+     * proprio retrato, no alto dela. Um link "Perfil" logo abaixo da foto seria
+     * o mesmo destino duas vezes, a dois centimetros de distancia.
+     */
+    PERFIL("perfil", "👤", "Perfil", "Perfil", false);
 
     companion object {
         val naBarraInferior = entries.filter { it.naBarra }
+
+        /** Os links que a lateral lista -- todos menos o perfil. Ver [PERFIL]. */
+        val noMenuLateral = entries.filter { it != PERFIL }
+
         fun porRota(rota: String?) = entries.firstOrNull { it.rota == rota }
     }
 }
@@ -236,11 +247,22 @@ private fun ItemDaBarra(
 @Composable
 fun BarraSuperior(
     titulo: String,
+    nome: String,
     escuro: Boolean,
     aoAlternarEscuro: (Boolean) -> Unit,
-    aoAbrirAparencia: () -> Unit,
     modifier: Modifier = Modifier,
     aoAbrirMenu: (() -> Unit)? = null,
+    /**
+     * Aparencia e perfil, para quando NAO ha lateral na tela.
+     *
+     * Nulos onde ela existe: os dois ja estao la, um no menu e o outro no
+     * retrato do alto, e repetir aqui foi exatamente o que se tirou. Mas num
+     * aparelho estreito a lateral nao existe e a barra de baixo nao tem espaco
+     * para mais dois itens -- sem estes botoes, as duas telas ficariam sem
+     * nenhum caminho.
+     */
+    aoAbrirAparencia: (() -> Unit)? = null,
+    aoAbrirPerfil: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -265,22 +287,47 @@ fun BarraSuperior(
         )
         InterruptorEscuro(escuro = escuro, aoAlternar = aoAlternarEscuro)
 
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(Doce.fundoCampo)
-                .border(1.dp, Doce.traco, RoundedCornerShape(999.dp))
-                .clickable(
+        if (aoAbrirAparencia != null) {
+            BotaoRedondo(aoTocar = aoAbrirAparencia) {
+                Text(text = Destino.APARENCIA.icone, fontSize = 17.sp)
+            }
+        }
+
+        if (aoAbrirPerfil != null) {
+            // O retrato, e nao um icone de bonequinho: e o mesmo controle do
+            // alto da lateral, no unico lugar onde ela nao esta.
+            FotoDePerfil(
+                nome = nome,
+                tamanho = 38.dp,
+                modifier = Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = androidx.compose.material3.ripple(color = Doce.destaque),
                     role = Role.Button,
-                    onClick = aoAbrirAparencia,
+                    onClick = aoAbrirPerfil,
                 ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = Destino.APARENCIA.icone, fontSize = 17.sp)
+            )
         }
+    }
+}
+
+/** Um circulo tocavel do tamanho da barra de cima. */
+@Composable
+private fun BotaoRedondo(aoTocar: () -> Unit, conteudo: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(Doce.fundoCampo)
+            .border(1.dp, Doce.traco, RoundedCornerShape(999.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = androidx.compose.material3.ripple(color = Doce.destaque),
+                role = Role.Button,
+                onClick = aoTocar,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        conteudo()
     }
 }
 

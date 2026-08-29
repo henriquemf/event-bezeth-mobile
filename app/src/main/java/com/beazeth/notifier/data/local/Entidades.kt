@@ -136,3 +136,26 @@ data class PendenciaEntity(
     val entidade: String,
     val criadoEm: Long,
 )
+
+/**
+ * Um pomodoro que chegou ao fim.
+ *
+ * A unica tabela daqui que NAO existe no servidor, e a unica que guarda
+ * historico: as outras espelham `/api/sync`, e o pomodoro nunca subiu para
+ * lugar nenhum -- o site tambem conta o tempo so no navegador.
+ *
+ * Nasceu para a tela de perfil poder dizer quantas horas de foco ja foram. Por
+ * isso ela conta do dia em que o app ganhou esta tabela em diante: nao ha de
+ * onde tirar o que passou.
+ *
+ * **A chave e o instante do fim, e nao um id que se gera.** O credito acontece
+ * na primeira vez que alguem OLHA para um pomodoro ja vencido -- pode ser a
+ * tela do pomodoro, pode ser a lateral, pode ser dois dias depois, ao reabrir o
+ * app. Com a chave natural, todos esses caminhos gravam a mesma linha, e o
+ * mesmo pomodoro nao entra duas vezes na conta.
+ */
+@Entity(tableName = "pomodoros")
+data class PomodoroEntity(
+    @PrimaryKey val terminadoEm: Long,
+    val minutos: Int,
+)

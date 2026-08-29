@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,8 +36,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.beazeth.notifier.data.Perfil
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.Repositorio
+import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.ui.LocalModoLocal
 import com.beazeth.notifier.ui.telas.EstadoPomodoro
 import com.beazeth.notifier.ui.telas.alternarPomodoro
@@ -59,9 +60,18 @@ internal val LARGURA_DA_LATERAL = 260.dp
  * A barra lateral, no formato do site.
  *
  * O app roda num tablet de 11 polegadas, e num tablet nao ha o aperto que
- * justificava a barra inferior do celular. Entao a lateral e a mesma do site,
- * com as mesmas partes e na mesma ordem (`partials/sidebar.html`): marca,
- * conta, menu, pomodoro, agua, modo escuro.
+ * justificava a barra inferior do celular. Entao a lateral segue a do site
+ * (`partials/sidebar.html`), com uma diferenca deliberada no comeco e outra no
+ * fim: perfil, menu, pomodoro, agua.
+ *
+ * **Nao ha marca no alto.** O site precisa dizer o proprio nome porque a pessoa
+ * chega nele por um link, no meio de outras abas. Um app ja foi aberto pelo
+ * icone com o nome embaixo -- repeti-lo dentro custava 50 dp do lugar mais
+ * nobre da tela para informar o que ninguem perguntou.
+ *
+ * **Nem interruptor de modo escuro no fim.** Ele ficava no rodape da lateral e
+ * tambem na barra de cima e tambem na tela de Aparencia: tres controles para a
+ * mesma chave. Ficaram os dois que estao no caminho de quem os procura.
  *
  * **Os dois widgets sao os do site, e nao atalhos.** O do pomodoro conta de
  * verdade, com a ampulheta escorrendo; o da agua soma copo de verdade. Foi o
@@ -81,16 +91,15 @@ internal val LARGURA_DA_LATERAL = 260.dp
 fun BarraLateral(
     nome: String,
     atual: Destino,
-    escuro: Boolean,
-    aoAlternarEscuro: (Boolean) -> Unit,
     aoTrocar: (Destino) -> Unit,
-    aoSair: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val cores = Doce
     val contexto = LocalContext.current.applicationContext
     val prefs = remember { Preferencias(contexto) }
     val repo = remember { Repositorio(contexto) }
+    val banco = remember { BancoLocal.obter(contexto) }
+    val perfil = remember { Perfil(contexto) }
     val escopo = rememberCoroutineScope()
 
     val fluxoDoPomodoro = remember { estadoDoPomodoro(prefs) }
@@ -116,64 +125,44 @@ fun BarraLateral(
             .padding(horizontal = Espaco.e4, vertical = Espaco.e3),
         verticalArrangement = Arrangement.spacedBy(Espaco.e3),
     ) {
-        // ------------------------------------------------------------- marca
+        // ------------------------------------------------------------ perfil
+        //
+        // A pessoa, e mais nada: foto e nome. A caixa INTEIRA leva ao perfil --
+        // e la que ficam trocar foto, trocar senha, os numeros e o botao de
+        // sair, que antes ocupava um lugar fixo aqui em toda tela.
+        //
+        // Sem conta a caixa continua existindo e continua clicavel: o nome
+        // local tambem se escolhe la, e "entrar numa conta" e o botao do fim
+        // daquela tela. Esconde-la deixaria quem esta sem conta sem porta.
+        val local = LocalModoLocal.current
+        val nomeLocal by perfil.nomeLocal.collectAsState("")
+        val mostrado = if (local) nomeLocal.ifBlank { "Sem conta" } else nome
+
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Canto.caixa))
+                .background(cores.fundoCampo)
+                .border(1.dp, cores.traco, RoundedCornerShape(Canto.caixa))
+                .clickable { aoTrocar(Destino.PERFIL) }
+                .padding(Espaco.e2),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
         ) {
-            PontoDaMarca(tamanho = 34.dp)
-            Column {
-                Text(
-                    text = "Event Notifier",
-                    style = TipografiaBeazeth.titleLarge.copy(fontSize = 17.sp),
-                    color = cores.tinta,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "Organize seus momentos",
-                    style = TipografiaBeazeth.bodyMedium.copy(fontSize = 11.sp),
-                    color = cores.tintaSuave,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        // ------------------------------------------------------------- conta
-        //
-        // Sem conta a caixa continua existindo, e diz a verdade: onde as coisas
-        // estao. Esconde-la deixaria a lateral com um buraco e sem porta de
-        // saida -- e "entrar numa conta" precisa ficar a mao de quem mudar de
-        // ideia, no mesmo lugar em que "sair" fica para quem tem conta.
-        val local = LocalModoLocal.current
-        Caixa {
+            FotoDePerfil(nome = mostrado, tamanho = 44.dp)
             Text(
-                text = if (local) "Sem conta" else nome,
-                style = TipografiaBeazeth.titleMedium.copy(fontSize = 14.sp),
+                text = mostrado,
+                style = TipografiaBeazeth.titleMedium.copy(fontSize = 15.sp),
                 color = cores.tinta,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-            )
-            if (local) {
-                Text(
-                    text = "Tudo neste aparelho",
-                    style = TipografiaBeazeth.bodyMedium.copy(fontSize = 11.sp),
-                    color = cores.tintaSuave,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            BotaoDaLateral(
-                texto = if (local) "Entrar numa conta" else "Sair",
-                aoTocar = aoSair,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
             )
         }
 
         // -------------------------------------------------------------- menu
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            for (destino in Destino.entries) {
+            for (destino in Destino.noMenuLateral) {
                 LinkDoMenu(
                     destino = destino,
                     ativo = destino == atual,
@@ -232,12 +221,12 @@ fun BarraLateral(
                 BotaoDaLateral(
                     texto = if (pomodoro.correndo) "Pausar" else "Começar",
                     destacado = !pomodoro.correndo,
-                    aoTocar = { escopo.launch { alternarPomodoro(prefs) } },
+                    aoTocar = { escopo.launch { alternarPomodoro(prefs, banco) } },
                     modifier = Modifier.weight(1f),
                 )
                 BotaoDaLateral(
                     texto = "Parar",
-                    aoTocar = { escopo.launch { zerarPomodoro(prefs) } },
+                    aoTocar = { escopo.launch { zerarPomodoro(prefs, banco) } },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -303,21 +292,6 @@ fun BarraLateral(
             }
         }
 
-        Spacer(modifier = Modifier.height(2.dp))
-
-        // ------------------------------------------------------- modo escuro
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-        ) {
-            InterruptorEscuro(escuro = escuro, aoAlternar = aoAlternarEscuro)
-            Text(
-                text = "Dark mode",
-                style = TipografiaBeazeth.bodyLarge.copy(fontSize = 14.sp),
-                color = cores.tintaSuave,
-            )
-        }
     }
 }
 

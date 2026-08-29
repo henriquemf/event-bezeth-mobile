@@ -29,7 +29,8 @@ O emulador de trabalho é esse aparelho (`Galaxy_Tab_A9_Plus`, com
 
 ## O que o app faz
 
-Sete telas, as mesmas sete do site, na mesma ordem do menu lateral.
+Sete telas do site, na mesma ordem do menu lateral, mais uma que o site não
+tem: a de perfil.
 
 | Tela | O que dá para fazer |
 | --- | --- |
@@ -39,12 +40,20 @@ Sete telas, as mesmas sete do site, na mesma ordem do menu lateral.
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
 | **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. |
-| **Aparência** | Dez paletas, dez fontes, modo escuro, estado da sincronização e a saída da conta. |
+| **Aparência** | Dez paletas, dez fontes e modo escuro. Só isso: conta e sincronização saíram daqui para o perfil. |
+| **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). No fim, o estado da sincronização e a saída da conta. |
 
 Fora das telas, na casca: a lateral com os widgets vivos de pomodoro e água (os
 mesmos do site), o botão de três barrinhas que a esconde, a barra de cima que
 recolhe ao rolar, e tela cheia — sem barra de notificação nem de navegação até
 que se puxe da borda.
+
+No alto da lateral fica o retrato: foto e nome, e nada mais. A caixa inteira
+leva ao perfil. **Não há marca ali** — um app já foi aberto pelo ícone com o
+nome embaixo, e repetir "Event Notifier" dentro custava o lugar mais nobre da
+tela para informar o que ninguém perguntou. **Nem interruptor de modo escuro no
+rodapé dela**, que existia também na barra de cima e também na tela de
+Aparência: três controles para a mesma chave.
 
 ---
 
@@ -247,14 +256,16 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Repositorio.kt       o que as telas usam: lê do Room, escreve no Room, enfileira
 │   ├── Sincronizador.kt     sobe a fila, baixa o que mudou
 │   ├── Remapeamentos.kt     avisa a interface quando um id provisório vira definitivo
-│   ├── TokenStore.kt        token, nome, carimbo de sync e a marca do modo local
+│   ├── TokenStore.kt        token, nome, e-mail, carimbo de sync e a marca do modo local
+│   ├── Perfil.kt            a foto (corte, giro e disco) e o nome de quem usa sem conta
+│   ├── Estatisticas.kt      as contas da tela de perfil, todas saindo do Room
 │   ├── Preferencias.kt      tema, fonte, modo escuro e o estado do pomodoro
 │   └── local/               Room: entidades, DAOs e o banco
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando
 └── ui/
     ├── CascaApp.kt          lateral ou barra inferior, e a barra de cima
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
-    ├── componentes/         o que se repete: cartão, campo, botão, lateral
+    ├── componentes/         o que se repete: cartão, campo, botão, lateral, retrato
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
     └── theme/               tokens, paletas, fontes e tipografia
 ```
@@ -300,6 +311,13 @@ o dia do *aparelho* enquanto o servidor conta pelo dia *dele*.
 - **Configurar o lembrete de água** (meta do dia, tamanho do copo, intervalo, janela do
   dia). O app lê a configuração e conta os copos com ela; mudar é no site, porque a API
   do app só expõe leitura dela.
+- **Foto de perfil na conta.** Ela fica no aparelho: reinstalar o app pede a foto
+  de novo, e o site não a mostra. Guardá-la na conta pediria uma coluna de bytes
+  num Postgres cobrado por byte, ou um serviço de arquivos novo — o disco do
+  Render é efêmero. Nome e e-mail, esses sim, moram na conta.
+- **Estatística de foco anterior a esta versão.** O histórico de pomodoros nasceu
+  com a tela de perfil e conta dali para a frente; nunca existiu antes, nem aqui
+  nem no site. Copos, tarefas e o resto vêm do servidor e já nascem completos.
 - **Criar tags** pelo app. Dá para usar as que existem; criar e apagar é no site,
   porque a API de tags só expõe leitura.
 

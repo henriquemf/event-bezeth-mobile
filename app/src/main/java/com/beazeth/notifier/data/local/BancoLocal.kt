@@ -4,19 +4,19 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * O banco do aparelho.
  *
- * Nao ha migracao declarada ainda porque nao ha versao anterior instalada em
- * lugar nenhum. Na primeira mudanca de esquema depois do app estar no celular
- * de alguem, entra uma `Migration` de verdade -- e nao
- * `fallbackToDestructiveMigration`, que apagaria o que ainda nao subiu.
- *
- * Por isso o esquema e exportado em JSON (ver `ksp` no build): a migracao
- * futura vai precisar saber exatamente como a tabela era.
+ * O esquema e exportado em JSON (ver `ksp` no build), e e de la que sai o SQL
+ * exato de cada migracao: o Room compara o banco aberto com o esquema esperado
+ * e RECUSA abrir se faltar uma virgula. Nada de
+ * `fallbackToDestructiveMigration`, que resolveria apagando -- e apagaria junto
+ * o que ainda nao subiu para o servidor.
  */
 @Database(
     entities = [
@@ -28,8 +28,9 @@ import kotlinx.coroutines.withContext
         AguaDiaEntity::class,
         ConfigAguaEntity::class,
         PendenciaEntity::class,
+        PomodoroEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class BancoLocal : RoomDatabase() {
@@ -41,8 +42,31 @@ abstract class BancoLocal : RoomDatabase() {
     abstract fun tags(): TagDao
     abstract fun agua(): AguaDao
     abstract fun pendencias(): PendenciaDao
+    abstract fun pomodoros(): PomodoroDao
 
     companion object {
+        /**
+         * A tabela do historico de pomodoro, que a versao 1 nao tinha.
+         *
+         * Acrescenta, e so. Nenhuma tabela existente e tocada, entao nao ha o
+         * que dar errado com o que ja esta no aparelho -- inclusive o que
+         * estiver na fila esperando rede.
+         *
+         * O SQL e copiado do esquema exportado (`app/schemas/.../2.json`) letra
+         * por letra, crases inclusive: o Room valida a tabela criada aqui
+         * contra a que ele esperava e lanca se houver diferenca. Escrever "de
+         * cabeca" e como esta migracao quebra.
+         */
+        private val DE_1_PARA_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pomodoros` " +
+                        "(`terminadoEm` INTEGER NOT NULL, `minutos` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`terminadoEm`))"
+                )
+            }
+        }
+
         @Volatile
         private var instancia: BancoLocal? = null
 
@@ -60,7 +84,7 @@ abstract class BancoLocal : RoomDatabase() {
                     context.applicationContext,
                     BancoLocal::class.java,
                     "beazeth.db",
-                ).build().also { instancia = it }
+                ).addMigrations(DE_1_PARA_2).build().also { instancia = it }
             }
 
         /**

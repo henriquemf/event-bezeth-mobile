@@ -43,6 +43,10 @@ interface NotaDao {
     @Query("SELECT COALESCE(MIN(id), 0) FROM notas")
     suspend fun menorId(): Long
 
+    /** Quantos post-its existem agora, para a tela de perfil. */
+    @Query("SELECT COUNT(*) FROM notas")
+    fun quantos(): Flow<Int>
+
     /**
      * As linhas que so existem neste aparelho.
      *
@@ -81,6 +85,19 @@ interface TarefaDao {
     @Query("SELECT COALESCE(MIN(id), 0) FROM tarefas")
     suspend fun menorId(): Long
 
+    /**
+     * Quantas tarefas ja foram riscadas, em todos os dias que o aparelho tem.
+     *
+     * "Que o aparelho tem" e a ressalva honesta: o que conta e o que a
+     * sincronizacao trouxe, e o servidor guarda a lista por dia desde sempre.
+     * Numa conta nova sincronizada agora, o numero ja nasce completo.
+     */
+    @Query("SELECT COUNT(*) FROM tarefas WHERE done = 1")
+    fun quantasFeitas(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM tarefas")
+    fun quantasAoTodo(): Flow<Int>
+
     /** Ver [NotaDao.provisorios]. */
     @Query("SELECT * FROM tarefas WHERE id < 0 ORDER BY id DESC")
     suspend fun provisorios(): List<TarefaEntity>
@@ -103,6 +120,13 @@ interface BlocoDao {
     @Query("SELECT COALESCE(MIN(id), 0) FROM blocos")
     suspend fun menorId(): Long
 
+    /** Minutos que a semana montada no planner ocupa, somando os blocos. */
+    @Query("SELECT COALESCE(SUM(endMinute - startMinute), 0) FROM blocos")
+    fun minutosDaSemana(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM blocos")
+    fun quantos(): Flow<Int>
+
     /** Ver [NotaDao.provisorios]. */
     @Query("SELECT * FROM blocos WHERE id < 0 ORDER BY id DESC")
     suspend fun provisorios(): List<BlocoEntity>
@@ -121,6 +145,9 @@ interface EventoDao {
 
     @Query("SELECT COALESCE(MIN(id), 0) FROM eventos")
     suspend fun menorId(): Long
+
+    @Query("SELECT COUNT(*) FROM eventos")
+    fun quantos(): Flow<Int>
 
     /** Ver [NotaDao.provisorios]. */
     @Query("SELECT * FROM eventos WHERE id < 0 ORDER BY id DESC")
@@ -165,6 +192,18 @@ interface AguaDao {
 
     @Query("SELECT * FROM agua_dias WHERE day = :dia")
     suspend fun buscar(dia: String): AguaDiaEntity?
+
+    /**
+     * Quantos copos em cada dia, para a tela de perfil.
+     *
+     * Uma consulta so, em vez de quatro (total, dias, recorde, dias na meta):
+     * a de "dias que bateram a meta" precisaria da meta como parametro, e a
+     * meta vem de OUTRO fluxo (a configuracao). Encadear um fluxo no outro para
+     * poder somar uma coluna e mais maquinaria do que a soma merece -- e a
+     * lista aqui tem uma linha por dia de uso, nao por copo.
+     */
+    @Query("SELECT glasses FROM agua_dias")
+    fun coposPorDia(): Flow<List<Int>>
 
     @Query("SELECT * FROM agua_config WHERE id = 1")
     fun observarConfig(): Flow<ConfigAguaEntity?>
@@ -217,4 +256,27 @@ interface PendenciaDao {
             "WHERE entidade = :entidade AND caminho LIKE '%' || :provisorio"
     )
     suspend fun trocarId(entidade: String, provisorio: String, definitivo: String)
+}
+
+/**
+ * O historico de foco, e as contas que a tela de perfil faz com ele.
+ *
+ * Tudo em `Flow`: a tela de perfil fica aberta enquanto um pomodoro termina, e
+ * o numero sobe sozinho.
+ */
+@Dao
+interface PomodoroDao {
+    /** `Upsert` porque a chave e o instante do fim -- ver [PomodoroEntity]:
+     *  creditar duas vezes o mesmo pomodoro reescreve a mesma linha. */
+    @Upsert
+    suspend fun gravar(pomodoro: PomodoroEntity)
+
+    @Query("SELECT COUNT(*) FROM pomodoros")
+    fun quantos(): Flow<Int>
+
+    @Query("SELECT COALESCE(SUM(minutos), 0) FROM pomodoros")
+    fun minutosFocados(): Flow<Int>
+
+    @Query("SELECT MIN(terminadoEm) FROM pomodoros")
+    fun primeiroEm(): Flow<Long?>
 }

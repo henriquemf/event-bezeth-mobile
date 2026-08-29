@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,14 +30,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.data.Preferencias
-import com.beazeth.notifier.data.Repositorio
-import com.beazeth.notifier.data.TokenStore
-import com.beazeth.notifier.sync.SyncWorker
-import com.beazeth.notifier.ui.LocalModoLocal
-import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.componentes.InterruptorEscuro
-import com.beazeth.notifier.ui.componentes.Marca
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.FONTES
@@ -65,15 +58,7 @@ import kotlinx.coroutines.launch
  */
 class AparenciaViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val repo = Repositorio(app)
-    private val guardaToken = TokenStore(app)
     private val prefs = Preferencias(app)
-
-    val pendencias = repo.pendencias()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-
-    val ultimaSync = guardaToken.ultimaSync
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val tema = prefs.tema
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PALETA_PADRAO)
@@ -92,15 +77,7 @@ class AparenciaViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 @Composable
-fun AparenciaScreen(
-    nome: String,
-    aoSair: () -> Unit,
-    vm: AparenciaViewModel = viewModel(),
-) {
-    val contexto = LocalContext.current
-    val local = LocalModoLocal.current
-    val pendentes by vm.pendencias.collectAsState()
-    val ultima by vm.ultimaSync.collectAsState()
+fun AparenciaScreen(vm: AparenciaViewModel = viewModel()) {
     val tema by vm.tema.collectAsState()
     val fonte by vm.fonte.collectAsState()
     val escuro by vm.escuro.collectAsState()
@@ -113,26 +90,6 @@ fun AparenciaScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(Espaco.e3),
     ) {
-        item {
-            CartaoDaTela {
-                Marca(nome = "Event Notifier", lema = "Organize seus momentos")
-                Text(
-                    text = if (local) "Sem conta" else "Conectado como $nome",
-                    style = TipografiaBeazeth.bodyLarge,
-                    color = cores.tinta,
-                )
-                Text(
-                    text = if (local) {
-                        "Tudo o que você escreve fica neste aparelho."
-                    } else {
-                        "A mesma conta do site."
-                    },
-                    style = TipografiaBeazeth.bodyMedium,
-                    color = cores.tintaSuave,
-                )
-            }
-        }
-
         // ------------------------------------------------------- modo escuro
         item {
             CartaoDaTela {
@@ -212,66 +169,6 @@ fun AparenciaScreen(
             }
         }
 
-        // --------------------------------------------------- sincronizacao
-        //
-        // O cartao inteiro some sem conta: nao ha fila para mostrar, nem
-        // "ultima conversa", nem servidor para sincronizar agora. Deixa-lo com
-        // tracinhos seria mostrar a moldura de uma coisa que nao existe.
-        if (!local) item {
-            CartaoDaTela(titulo = "Sincronização") {
-                Linha(
-                    rotulo = "Esperando para subir",
-                    valor = if (pendentes == 0) "nada" else "$pendentes",
-                )
-                Linha(
-                    rotulo = "Última conversa",
-                    // O carimbo vem do relogio do banco, em UTC. Mostrar so a
-                    // hora ja responde a pergunta que interessa -- "faz muito
-                    // tempo?" -- sem prometer um fuso que ele nao tem.
-                    valor = ultima?.replace("T", " ")?.take(16) ?: "ainda não",
-                )
-
-                Text(
-                    text = if (pendentes == 0) {
-                        "Tudo o que você escreveu já está no servidor."
-                    } else {
-                        "Escrito no aparelho. Sobe sozinho quando houver rede."
-                    },
-                    style = TipografiaBeazeth.bodyMedium,
-                    color = cores.tintaSuave,
-                )
-
-                BotaoPrimario(
-                    texto = "Sincronizar agora",
-                    aoTocar = { SyncWorker.agora(contexto) },
-                )
-            }
-        }
-
-        item {
-            CartaoDaTela {
-                BotaoPrimario(
-                    texto = if (local) "Entrar numa conta" else "Sair da conta",
-                    aoTocar = aoSair,
-                )
-                Text(
-                    text = if (local) {
-                        // A promessa e concreta porque o codigo a cumpre: ver
-                        // `Repositorio.adotarDadosLocais`. Prometer sem cumprir
-                        // aqui seria a pior variante -- a pessoa entra confiando
-                        // e descobre depois.
-                        "Post-its, tarefas, blocos e eventos escritos aqui sobem para a " +
-                            "conta ao entrar. Nada é apagado. Copos de água e aparência " +
-                            "continuam só neste aparelho."
-                    } else {
-                        "Sair apaga os dados guardados neste aparelho. Nada se perde: " +
-                            "tudo está no servidor."
-                    },
-                    style = TipografiaBeazeth.bodyMedium,
-                    color = cores.tintaSuave,
-                )
-            }
-        }
     }
 }
 
@@ -362,29 +259,6 @@ private fun PreviewDeFonte(
             fontFamily = dupla.corpo,
             fontSize = 12.sp,
             color = Doce.tintaSuave,
-        )
-    }
-}
-
-@Composable
-private fun Linha(rotulo: String, valor: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = rotulo,
-            style = TipografiaBeazeth.bodyMedium,
-            color = Doce.tintaSuave,
-        )
-        Text(
-            text = valor,
-            style = TipografiaBeazeth.bodyMedium.copy(
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-            ),
-            color = Doce.tinta,
         )
     }
 }

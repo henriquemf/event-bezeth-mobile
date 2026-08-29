@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.beazeth.notifier.data.Api
+import com.beazeth.notifier.data.Perfil
 import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.data.TokenStore
 import com.beazeth.notifier.data.local.BancoLocal
@@ -25,7 +26,15 @@ sealed interface Sessao {
      *  tela de login para quem já está logado. */
     data object Verificando : Sessao
     data object Fora : Sessao
-    data class Dentro(val nome: String) : Sessao
+
+    /**
+     * Dentro de uma conta.
+     *
+     * Carrega nome e e-mail porque a casca precisa dos dois em toda tela: o
+     * nome fica na lateral, e a tela de perfil mostra o e-mail. Vem do
+     * armazenamento, nao da rede -- ver [TokenStore].
+     */
+    data class Dentro(val nome: String, val email: String) : Sessao
 
     /**
      * Sem conta: tudo mora neste aparelho e nada sai dele.
@@ -79,12 +88,18 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
             return@launch
         }
 
-        _sessao.value = Sessao.Dentro(guardaToken.nomeAtual().orEmpty())
+        _sessao.value = Sessao.Dentro(
+            nome = guardaToken.nomeAtual().orEmpty(),
+            email = guardaToken.emailAtual().orEmpty(),
+        )
 
         when (val r = Api.quemSou(token)) {
-            // O nome pode ter mudado no site desde o último login.
-            is Api.Resultado.Ok ->
-                r.corpo.user?.nome?.let { _sessao.value = Sessao.Dentro(it) }
+            // Nome e e-mail podem ter mudado no site, ou em outro aparelho,
+            // desde o ultimo login.
+            is Api.Resultado.Ok -> r.corpo.user?.let { conta ->
+                guardaToken.guardarConta(conta.nome, conta.email)
+                _sessao.value = Sessao.Dentro(conta.nome, conta.email)
+            }
 
             is Api.Resultado.Erro ->
                 if (r.semSessao) {
@@ -104,7 +119,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
                 if (token == null || conta == null) {
                     _login.value = EstadoLogin(erro = "Resposta incompleta do servidor.")
                 } else {
-                    concluirEntrada(token, conta.nome)
+                    concluirEntrada(token, conta.nome, conta.email)
                 }
             }
             is Api.Resultado.Erro -> _login.value = EstadoLogin(erro = r.mensagem)
@@ -121,7 +136,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
                 if (token == null || conta == null) {
                     _login.value = EstadoLogin(erro = "Resposta incompleta do servidor.")
                 } else {
-                    concluirEntrada(token, conta.nome)
+                    concluirEntrada(token, conta.nome, conta.email)
                 }
             }
             is Api.Resultado.Erro -> _login.value = EstadoLogin(erro = r.mensagem)
@@ -136,14 +151,25 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
      * de envio volta a aceitar escritas, e por isso a adocao vem em seguida e
      * nao antes -- `Repositorio.enfileirar` ignoraria tudo em silencio.
      */
-    private suspend fun concluirEntrada(token: String, nome: String) {
+    private suspend fun concluirEntrada(token: String, nome: String, email: String) {
         val vinhaDoModoLocal = guardaToken.modoLocalAtivo()
-        guardaToken.guardar(token, nome)
+        guardaToken.guardar(token, nome, email)
         if (vinhaDoModoLocal) {
             Repositorio(getApplication()).adotarDadosLocais()
         }
         _login.value = EstadoLogin()
-        _sessao.value = Sessao.Dentro(nome)
+        _sessao.value = Sessao.Dentro(nome, email)
+    }
+
+    /**
+     * O perfil trocou nome ou e-mail: a casca inteira acompanha.
+     *
+     * A tela de perfil ja gravou no [TokenStore]; o que falta e o estado que a
+     * lateral desenha. Sem isto, o nome novo so apareceria na proxima abertura
+     * do app.
+     */
+    fun contaMudou(nome: String, email: String) {
+        _sessao.value = Sessao.Dentro(nome, email)
     }
 
     /** Limpa o erro ao trocar entre entrar e criar conta: a mensagem da tela
@@ -191,6 +217,10 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
         SyncWorker.parar(getApplication())
         BancoLocal.limpar(getApplication())
         guardaToken.limpar()
+        // A foto e o nome escolhido saem junto. Sao o rosto de quem estava
+        // dentro: deixa-los faria a proxima conta abrir com a cara da anterior
+        // na lateral.
+        Perfil(getApplication()).removerFoto()
         _sessao.value = Sessao.Fora
     }
 }

@@ -30,13 +30,20 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.beazeth.notifier.sync.SyncWorker
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.beazeth.notifier.ui.componentes.BarraInferior
 import com.beazeth.notifier.ui.componentes.BarraLateral
 import com.beazeth.notifier.ui.componentes.BarraSuperior
 import com.beazeth.notifier.ui.componentes.Destino
 import com.beazeth.notifier.ui.telas.AguaScreen
+import com.beazeth.notifier.data.Preferencias
+import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.ui.telas.AparenciaScreen
 import com.beazeth.notifier.ui.telas.PomodoroScreen
+import com.beazeth.notifier.ui.telas.creditarPomodoroTerminado
+import com.beazeth.notifier.ui.telas.estadoDoPomodoro
+import com.beazeth.notifier.ui.telas.perfil.PerfilScreen
 import com.beazeth.notifier.ui.telas.TodoScreen
 import com.beazeth.notifier.ui.telas.calendario.CalendarioScreen
 import com.beazeth.notifier.ui.telas.planner.PlannerScreen
@@ -53,9 +60,9 @@ import kotlin.math.roundToInt
  * ## Duas navegacoes, uma por formato
  *
  * **Onde cabe, a lateral do site.** O app roda num tablet de 11 polegadas, e
- * ali ha largura para a mesma barra lateral da versao web -- com marca, conta,
- * menu, pomodoro e agua, exatamente como em `partials/sidebar.html`. As tres
- * barrinhas a escondem e a trazem de volta, para quem quiser a tela inteira.
+ * ali ha largura para a mesma barra lateral da versao web -- com perfil, menu,
+ * pomodoro e agua, seguindo `partials/sidebar.html`. As tres barrinhas a
+ * escondem e a trazem de volta, para quem quiser a tela inteira.
  *
  * **Onde nao cabe, barra embaixo**, no alcance do polegar -- a `.bottom-nav` do
  * site, que existe la pelo mesmo motivo: abaixo de certa largura a lateral
@@ -72,9 +79,11 @@ import kotlin.math.roundToInt
 @Composable
 fun CascaApp(
     nome: String,
+    email: String,
     escuro: Boolean,
     aoAlternarEscuro: (Boolean) -> Unit,
     aoSair: () -> Unit,
+    aoAtualizarConta: (String, String) -> Unit,
     local: Boolean = false,
 ) {
     val contexto = LocalContext.current
@@ -103,6 +112,23 @@ fun CascaApp(
     }
 
     LaunchedEffect(atual) { recolhida = 0f }
+
+    // Um pomodoro que terminou com o app fechado -- ou com a pessoa em outra
+    // tela -- entra na conta do perfil aqui. E a casca porque ela esta em TODAS
+    // as telas, inclusive nos aparelhos sem lateral; a tela do pomodoro sozinha
+    // so creditaria quem estivesse olhando para ela na hora.
+    LaunchedEffect(Unit) {
+        val prefs = Preferencias(contexto.applicationContext)
+        val banco = BancoLocal.obter(contexto.applicationContext)
+        estadoDoPomodoro(prefs)
+            // O fluxo bate a cada segundo, e "terminado" continua verdade ate
+            // alguem tocar em Começar. Sem reduzir a UM valor por pomodoro, o
+            // credito seria pedido sessenta vezes por minuto para nao fazer
+            // nada -- a checagem e barata, mas nao de graca.
+            .map { if (it.fimEm > 0L && it.restante == 0) it.fimEm else 0L }
+            .distinctUntilChanged()
+            .collect { if (it > 0L) creditarPomodoroTerminado(prefs, banco) }
+    }
 
     val conexao = remember {
         object : NestedScrollConnection {
@@ -137,10 +163,7 @@ fun CascaApp(
                 BarraLateral(
                     nome = nome,
                     atual = atual,
-                    escuro = escuro,
-                    aoAlternarEscuro = aoAlternarEscuro,
                     aoTrocar = { nav.irPara(it) },
-                    aoSair = aoSair,
                 )
             }
 
@@ -149,7 +172,14 @@ fun CascaApp(
                 titulo = atual.titulo,
                 escuro = escuro,
                 aoAlternarEscuro = aoAlternarEscuro,
-                aoAbrirAparencia = { nav.irPara(Destino.APARENCIA) },
+                nome = nome,
+                // Os dois so aparecem onde NAO ha lateral. Com ela na tela,
+                // seriam um segundo caminho para o que ja esta a um toque de
+                // distancia -- e foi por isso que o botao de paleta saiu daqui.
+                aoAbrirAparencia =
+                    if (lateralCabe) null else ({ nav.irPara(Destino.APARENCIA) }),
+                aoAbrirPerfil =
+                    if (lateralCabe) null else ({ nav.irPara(Destino.PERFIL) }),
                 // As tres barrinhas so existem onde ha lateral para esconder.
                 // Com a barra de baixo na tela, um segundo menu para a mesma
                 // coisa e como o app comeca a ficar confuso.
@@ -180,8 +210,14 @@ fun CascaApp(
                 composable(Destino.TODO.rota) { TodoScreen() }
                 composable(Destino.POMODORO.rota) { PomodoroScreen() }
                 composable(Destino.AGUA.rota) { AguaScreen() }
-                composable(Destino.APARENCIA.rota) {
-                    AparenciaScreen(nome = nome, aoSair = aoSair)
+                composable(Destino.APARENCIA.rota) { AparenciaScreen() }
+                composable(Destino.PERFIL.rota) {
+                    PerfilScreen(
+                        nome = nome,
+                        email = email,
+                        aoSair = aoSair,
+                        aoAtualizarConta = aoAtualizarConta,
+                    )
                 }
             }
 

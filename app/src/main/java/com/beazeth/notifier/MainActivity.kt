@@ -139,19 +139,25 @@ private fun App(
         }
         is Sessao.Dentro -> CascaApp(
             nome = s.nome,
+            email = s.email,
             escuro = escuro,
             aoAlternarEscuro = aoAlternarEscuro,
             aoSair = vm::sair,
+            aoAtualizarConta = vm::contaMudou,
         )
         // A mesma casca, e nao uma versao reduzida: o modo local nao e um app
         // menor, e o mesmo app sem servidor. O que ele nao tem -- fila, sync,
         // nome de conta -- some por conta do proprio `local`.
         Sessao.Local -> CascaApp(
             nome = "",
+            email = "",
             local = true,
             escuro = escuro,
             aoAlternarEscuro = aoAlternarEscuro,
             aoSair = vm::verTelaDeLogin,
+            // Sem conta nao ha o que avisar: o nome local mora no aparelho e a
+            // propria tela de perfil ja o observa de la.
+            aoAtualizarConta = { _, _ -> },
         )
     }
 }

@@ -28,6 +28,7 @@ class TokenStore(private val context: Context) {
 
     private val chaveToken = stringPreferencesKey("token")
     private val chaveNome = stringPreferencesKey("nome")
+    private val chaveEmail = stringPreferencesKey("email")
     private val chaveSync = stringPreferencesKey("ultima_sync")
     private val chaveLocal = booleanPreferencesKey("modo_local")
 
@@ -55,9 +56,20 @@ class TokenStore(private val context: Context) {
     /** Nome de quem entrou, para a interface saudar sem esperar a rede. */
     val nome: Flow<String?> = context.dataStore.data.map { it[chaveNome] }
 
+    /**
+     * E-mail da conta, para a tela de perfil mostrar sem pedir a rede.
+     *
+     * Vem do login e e refeito a cada `/api/me`. Guardar aqui e o que permite a
+     * tela abrir com o campo ja preenchido no aviao -- e ela abre offline como
+     * todas as outras.
+     */
+    val email: Flow<String?> = context.dataStore.data.map { it[chaveEmail] }
+
     suspend fun tokenAtual(): String? = token.first()
 
     suspend fun nomeAtual(): String? = nome.first()
+
+    suspend fun emailAtual(): String? = email.first()
 
     /**
      * O instante da ultima conversa bem-sucedida com `/api/sync`.
@@ -77,14 +89,29 @@ class TokenStore(private val context: Context) {
         context.dataStore.edit { it[chaveSync] = instante }
     }
 
-    suspend fun guardar(token: String, nome: String) {
+    suspend fun guardar(token: String, nome: String, email: String) {
         context.dataStore.edit {
             it[chaveToken] = token
             it[chaveNome] = nome
+            it[chaveEmail] = email
             // Entrar numa conta encerra o modo local, sempre. Deixar a marca
             // faria a fila continuar desligada com um token valido no bolso --
             // o app pareceria funcionar e nada subiria.
             it.remove(chaveLocal)
+        }
+    }
+
+    /**
+     * Atualiza o que a conta mostra, sem tocar no token.
+     *
+     * Depois de trocar nome ou e-mail no perfil, e depois de todo `/api/me`: o
+     * nome pode ter mudado no site desde o ultimo login, e a lateral mostra
+     * este valor em toda tela.
+     */
+    suspend fun guardarConta(nome: String, email: String) {
+        context.dataStore.edit {
+            it[chaveNome] = nome
+            it[chaveEmail] = email
         }
     }
 

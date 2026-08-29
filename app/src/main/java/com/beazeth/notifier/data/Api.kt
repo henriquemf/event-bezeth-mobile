@@ -110,6 +110,40 @@ object Api {
         )
 
     /**
+     * Muda nome, e-mail ou senha da conta -- a tela de perfil.
+     *
+     * Manda SO o que veio preenchido: `explicitNulls = false` no [json] faz
+     * campo nulo sumir do corpo, e o servidor trata ausente como "nao mexer".
+     * Sem isso, abrir a tela e salvar so o nome mandaria `email: null` junto e
+     * apagaria o e-mail da conta.
+     *
+     * `senhaAtual` e obrigatoria no servidor para trocar e-mail ou senha, e
+     * ignorada para o nome. A regra fica la, e nao duplicada aqui -- e a
+     * mensagem de erro dele que a tela mostra.
+     */
+    suspend fun atualizarConta(
+        token: String,
+        nome: String? = null,
+        email: String? = null,
+        senhaAtual: String? = null,
+        senhaNova: String? = null,
+    ): Resultado<RespostaConta> = chamar(
+        caminho = "/api/me",
+        metodo = "PATCH",
+        token = token,
+        corpo = json.encodeToString(
+            MudancaDeConta.serializer(),
+            MudancaDeConta(
+                nome = nome,
+                email = email,
+                senhaAtual = senhaAtual,
+                senhaNova = senhaNova,
+            ),
+        ),
+        desserializar = { json.decodeFromString(RespostaConta.serializer(), it) },
+    )
+
+    /**
      * O que mudou desde [desde].
      *
      * `desde` nulo na primeira vez: o servidor entao devolve tudo o que a conta
@@ -149,6 +183,15 @@ object Api {
      *  senha com aspas ou barra invertida quebraria a string na mao. */
     @Serializable
     private data class MapaSimples(val email: String, val password: String)
+
+    /** O corpo do PATCH. Todo campo e opcional: o que for nulo nao vai. */
+    @Serializable
+    private data class MudancaDeConta(
+        @SerialName("displayName") val nome: String? = null,
+        val email: String? = null,
+        @SerialName("currentPassword") val senhaAtual: String? = null,
+        @SerialName("newPassword") val senhaNova: String? = null,
+    )
 
     /** `displayName` e o nome do campo no servidor; `nome` e o daqui. */
     @Serializable
