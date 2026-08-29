@@ -72,32 +72,102 @@ $env:JAVA_HOME = $jdk
 Write-Host "   $jdk"
 
 # ------------------------------------------------------------------- a chave
+#
+# Na primeira vez o script se configura sozinho: pergunta a senha, confere que
+# ela abre a chave, e grava o `keystore.properties`. Nas seguintes, nem
+# pergunta. Editar um arquivo de propriedades a mao antes do primeiro build era
+# o unico passo aqui que exigia abrir um editor -- e o passo em que se erra a
+# senha e so se descobre quatro minutos depois, no meio da saida do Gradle.
 Passo 'Conferindo a chave de assinatura'
 $propriedades = Join-Path $raiz 'keystore.properties'
-if (-not (Test-Path $propriedades)) {
-    Erro @"
-Falta o arquivo keystore.properties.
 
-    copy keystore.properties.exemplo keystore.properties
+function Ler-Propriedades($caminho) {
+    $d = @{}
+    Get-Content $caminho | ForEach-Object {
+        if ($_ -match '^\s*([^#=]+?)\s*=\s*(.*?)\s*$') { $d[$Matches[1]] = $Matches[2] }
+    }
+    return $d
+}
 
-e preencha a senha. Sem ele o .apk sai sem assinatura, e um .apk sem
-assinatura nao instala em aparelho nenhum.
-"@
+function Testar-Senha($chave, $alias, $senha) {
+    # `-storepass:env` e nao `-storepass`: a senha na linha de comando aparece
+    # para qualquer processo que liste os outros. Na variavel de ambiente do
+    # processo, nao.
+    $env:SENHA_DA_CHAVE = $senha
+    & (Join-Path $jdk 'bin\keytool.exe') -list -keystore $chave -alias $alias `
+        -storepass:env SENHA_DA_CHAVE | Out-Null
+    $ok = ($LASTEXITCODE -eq 0)
+    Remove-Item Env:\SENHA_DA_CHAVE
+    return $ok
 }
-$dados = @{}
-Get-Content $propriedades | ForEach-Object {
-    if ($_ -match '^\s*([^#=]+?)\s*=\s*(.*?)\s*$') { $dados[$Matches[1]] = $Matches[2] }
+
+# Onde a chave esta e como ela se chama: do arquivo de verdade se ele ja
+# existe, do exemplo se nao.
+$exemplo = Ler-Propriedades (Join-Path $raiz 'keystore.properties.exemplo')
+$arquivoDaChave = $exemplo['storeFile']
+$aliasDaChave = $exemplo['keyAlias']
+$senhaGuardada = $null
+
+if (Test-Path $propriedades) {
+    $dados = Ler-Propriedades $propriedades
+    if ($dados['storeFile']) { $arquivoDaChave = $dados['storeFile'] }
+    if ($dados['keyAlias']) { $aliasDaChave = $dados['keyAlias'] }
+    $senhaGuardada = $dados['storePassword']
 }
-$caminhoDaChave = $dados['storeFile']
+
+$caminhoDaChave = $arquivoDaChave
 if (-not [System.IO.Path]::IsPathRooted($caminhoDaChave)) {
     $caminhoDaChave = Join-Path $raiz $caminhoDaChave
 }
 if (-not (Test-Path $caminhoDaChave)) {
-    Erro "keystore.properties aponta para uma chave que nao existe:`n    $caminhoDaChave"
+    Erro "Nao achei a chave de assinatura em:`n    $caminhoDaChave`n`nE o arquivo android.keystore. Se ele estiver noutro lugar, ponha o caminho`nem keystore.properties (linha storeFile) e rode de novo."
 }
-if ($dados['storePassword'] -like '*COLOQUE_A_SENHA*') {
-    Erro 'A senha em keystore.properties ainda e o texto de exemplo.'
+
+# Perguntar e o caminho para TRES situacoes, e nao so para a primeira vez: nao
+# ha arquivo, ha arquivo com o texto de exemplo (copiou e parou no editor), ou
+# ha senha que nao abre a chave (digitou errado, ou a chave mudou). Nas tres a
+# resposta util e a mesma - pedir a senha e arrumar o arquivo -, e nao mandar
+# quem esta empacotando ir editar propriedade a mao.
+$precisaPerguntar = $true
+if ($senhaGuardada -and ($senhaGuardada -notlike '*COLOQUE_A_SENHA*')) {
+    if (Testar-Senha $caminhoDaChave $aliasDaChave $senhaGuardada) {
+        $precisaPerguntar = $false
+    } else {
+        Aviso 'A senha guardada nao abre a chave. Vou pedir de novo.'
+    }
 }
+
+if ($precisaPerguntar) {
+    Write-Host ''
+    Write-Host '   Preciso da senha da chave de assinatura:' -ForegroundColor Yellow
+    Write-Host "   $caminhoDaChave" -ForegroundColor Yellow
+    Write-Host '   Pergunto uma vez so - guardo em keystore.properties, que o git ignora.' -ForegroundColor Yellow
+    Write-Host ''
+
+    $senha = $null
+    for ($tentativa = 1; $tentativa -le 3; $tentativa++) {
+        $secreta = Read-Host '   Senha' -AsSecureString
+        $ponteiro = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secreta)
+        $tentada = [Runtime.InteropServices.Marshal]::PtrToStringAuto($ponteiro)
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ponteiro)
+
+        if (Testar-Senha $caminhoDaChave $aliasDaChave $tentada) { $senha = $tentada; break }
+        if ($tentativa -eq 3) { Erro 'Senha errada tres vezes. Nada foi gravado.' }
+        Aviso 'Senha errada. Tente de novo.'
+    }
+
+    @"
+# Escrito por empacotar.ps1. Nao versionado, de proposito: quem tem a chave e a
+# senha assina atualizacao em nome do app.
+storeFile=$arquivoDaChave
+storePassword=$senha
+keyPassword=$senha
+keyAlias=$aliasDaChave
+"@ | Set-Content -Path $propriedades -Encoding UTF8
+
+    Write-Host '   Senha confere, guardada. Nao pergunto de novo.' -ForegroundColor Green
+}
+
 Write-Host "   $caminhoDaChave"
 
 # --------------------------------------------------------------- o servidor
@@ -184,6 +254,12 @@ $tamanho = [math]::Round((Get-Item $destino).Length / 1MB, 1)
 Write-Host "`n== Pronto" -ForegroundColor Green
 Write-Host "   $destino"
 Write-Host "   $tamanho MB, versao $versaoAtual, falando com $servidor"
+
+# O caminho na area de transferencia e a pasta ja aberta com o arquivo
+# selecionado: o passo seguinte e sempre o mesmo, mandar o arquivo, e ele nao
+# precisa comecar por procurar onde ele foi parar.
+try { Set-Clipboard -Value $destino; Write-Host '   (caminho copiado)' } catch { }
+Start-Process explorer.exe "/select,`"$destino`""
 Write-Host @"
 
    Como mandar
