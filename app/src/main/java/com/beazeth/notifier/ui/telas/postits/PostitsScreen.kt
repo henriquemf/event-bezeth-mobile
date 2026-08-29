@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.data.Remapeamentos
 import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.data.Sincronizador
+import com.beazeth.notifier.ui.componentes.BotaoPilula
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
@@ -175,11 +175,11 @@ fun PostitsScreen(vm: PostitsViewModel = viewModel()) {
                     color = cores.tintaSuave,
                     modifier = Modifier.weight(1f),
                 )
-                BotaoDeBarra(texto = "Organizar") { vm.organizar(larguraVisivel) }
+                BotaoPilula(texto = "Organizar", aoTocar = { vm.organizar(larguraVisivel) })
                 // Sem texto no campo, cria um post-it em branco: e assim que o
                 // site faz, e e como se usa um bloco de papel -- pega uma
                 // folha primeiro, escreve depois.
-                BotaoDeBarra(texto = "Novo post-it", destacado = true) { criar() }
+                BotaoPilula(texto = "Novo post-it", aoTocar = { criar() }, destacado = true)
             }
         }
 
@@ -300,34 +300,6 @@ private fun FiltroDeQuadro(rotulo: String, ativo: Boolean, aoTocar: () -> Unit) 
             text = rotulo,
             style = TipografiaBeazeth.titleMedium.copy(fontSize = 13.sp),
             color = if (ativo) Doce.destaqueEscuro else Doce.tintaSuave,
-        )
-    }
-}
-
-@Composable
-private fun BotaoDeBarra(texto: String, destacado: Boolean = false, aoTocar: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                if (destacado) {
-                    Brush.linearGradient(listOf(Doce.destaque, Doce.destaqueClaro))
-                } else {
-                    SolidColor(Doce.fundoCampo)
-                }
-            )
-            .border(
-                1.dp,
-                if (destacado) Color.Transparent else Doce.traco,
-                RoundedCornerShape(999.dp),
-            )
-            .clickable(onClick = aoTocar)
-            .padding(horizontal = Espaco.e3, vertical = 8.dp),
-    ) {
-        Text(
-            text = texto,
-            style = TipografiaBeazeth.titleMedium.copy(fontSize = 13.sp),
-            color = if (destacado) Color.White else Doce.tinta,
         )
     }
 }

@@ -1,83 +1,64 @@
 package com.beazeth.notifier.ui.telas.calendario
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.data.local.EventoEntity
-import com.beazeth.notifier.ui.LocalModoLocal
-import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
-import com.beazeth.notifier.ui.telas.corDoHex
-import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
-import com.beazeth.notifier.ui.theme.TipografiaBeazeth
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import kotlin.math.roundToInt
 
 /**
  * A agenda: a grade do mes e a lista de eventos.
  *
- * **As duas, e nao uma.** E o `calendar-layout` do site -- a grade a esquerda,
- * "Próximos eventos" na coluna ao lado. Aqui a divisao e a mesma quando ha
- * largura para ela (celular deitado, tablet) e vira uma coluna so quando nao
- * ha: a grade em cima, a lista embaixo, rolando junto.
+ * **As duas, e nao uma.** E o `calendar-layout` do site -- a grade e, ao lado
+ * ou embaixo dela, "Próximos eventos".
  *
- * **Tocar num dia liga as duas.** Sem dia escolhido, a lista mostra tudo,
- * agrupado por dia, como antes. Com um dia escolhido, mostra so aquele -- e o
- * botao de criar ja nasce naquela data, que e o que o `dateClick` do site faz.
- * Tocar de novo no mesmo dia solta a selecao; sem isso, voltar a ver o mes
- * inteiro exigiria adivinhar onde fica o botao que desfaz.
+ * **Quando cada uma das duas formas.** O site so poe a lista ao lado a partir
+ * de 1400 px de janela: abaixo disso o mes ficaria com 566 px, e a barra de
+ * controles do FullCalendar -- prev, next, hoje e os tres botoes de visao --
+ * quebra em duas linhas nessa largura. A barra daqui tem tres botoes e um
+ * titulo, entao esse limite nao se aplica, e o corte pode ser bem mais baixo:
+ * [LARGURA_PARA_DUAS_COLUNAS], medida na area de conteudo.
+ *
+ * No tablet isso da duas colunas, e e o que se quer: o mes inteiro cabe na
+ * tela com celulas de ~85x75 dp, e "Próximos eventos" fica sempre a vista, em
+ * vez de morar abaixo da dobra esperando alguem rolar ate ele. Uma lista do
+ * que vem por ai que so aparece quando se rola nao lembra ninguem de nada.
+ *
+ * O corte ja foi 620 dp, de quando a pergunta era so "cabem duas colunas?".
+ * Cabiam -- com celulas de 44 dp, uma grade de brinquedo ao lado de um cartao
+ * quase vazio. O que mudou nao foi o numero de colunas, foi o tamanho do mes.
+ *
+ * **Tocar num dia mira a grade, nao a lista.** O dia escolhido acende na grade
+ * e o botao de criar ja nasce naquela data, que e o que o `dateClick` do site
+ * faz. Tocar de novo no mesmo dia solta a selecao.
+ *
+ * A lista NAO acompanha: ela mostra sempre de hoje para a frente. Chegou a
+ * filtrar pelo dia escolhido, e o resultado era que a unica coisa da tela que
+ * responde "o que vem por ai" desaparecia justamente quando se tocava no
+ * calendario para conferir uma data.
  */
 @Composable
 fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
@@ -144,53 +125,44 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
 
     // Agrupa por dia mantendo a ordem cronologica que o Room ja entregou.
     val porDia = eventos.groupBy { it.eventDatetime.take(10) }.toSortedMap()
-    val visiveis = diaEscolhido?.let { dia ->
-        porDia.filterKeys { it == dia }
-    } ?: porDia
 
-    val painel: @Composable () -> Unit = {
-        CartaoDaTela {
-            GradeDoMes(
-                mes = mes,
-                porDia = porDia,
-                selecionado = selecionado,
-                hoje = hoje,
-                aoTrocarMes = { novo -> mesEmNumero = novo.year * 12 + novo.monthValue - 1 },
-                aoEscolherDia = { data ->
-                    val iso = data.toString()
-                    diaEscolhido = if (diaEscolhido == iso) null else iso
-                },
-                diaAlvo = alvo,
-                aoMedirDia = { data, limites -> areasDosDias[data.toString()] = limites },
-            )
-
-            if (selecionado != null) {
-                Text(
-                    text = DIAS_LONGOS[selecionado.dayOfWeek.value - 1] + ", " +
-                        "${selecionado.dayOfMonth} de ${MESES[selecionado.monthValue - 1]}",
-                    style = TipografiaBeazeth.bodyMedium,
-                    color = Doce.tintaSuave,
-                )
-            }
-
-            BotaoPrimario(
-                texto = if (selecionado == null) {
-                    "Novo evento"
-                } else {
-                    "Novo evento em %02d/%02d".format(
-                        selecionado.dayOfMonth, selecionado.monthValue,
-                    )
-                },
-                aoTocar = { criando = true },
-            )
-        }
-    }
+    // "Proximos eventos" comeca sempre em HOJE, e nao no dia escolhido na
+    // grade. Escolher um dia mudava a lista para so aquele dia, e o efeito era
+    // que a unica coisa que diz o que vem por ai sumia justamente quando se
+    // tocava no calendario para conferir uma data. Agora escolher um dia so
+    // mexe na grade e no botao de criar; a lista fica.
+    //
+    // Comparacao de texto e nao de data: a chave e ISO (`2026-08-28`), e nesse
+    // formato a ordem alfabetica E a ordem cronologica.
+    val hojeIso = hoje.toString()
+    val visiveis = porDia.filterKeys { it >= hojeIso }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // A partir daqui cabem duas colunas de largura util. Abaixo disso, a
-        // grade ao lado da lista deixaria as duas estreitas demais para as
-        // duas coisas -- pior que empilhar.
-        val emDuasColunas = maxWidth >= 620.dp
+        val emDuasColunas = maxWidth >= LARGURA_PARA_DUAS_COLUNAS
+        val alturaDasSemanas = maxHeight - ENFEITES_DA_GRADE
+
+        val grade: @Composable () -> Unit = {
+            CartaoDaTela {
+                GradeDoMes(
+                    mes = mes,
+                    porDia = porDia,
+                    selecionado = selecionado,
+                    hoje = hoje,
+                    aoTrocarMes = { novo ->
+                        mesEmNumero = novo.year * 12 + novo.monthValue - 1
+                    },
+                    aoEscolherDia = { data ->
+                        val iso = data.toString()
+                        diaEscolhido = if (diaEscolhido == iso) null else iso
+                    },
+                    aoTocarEvento = { emEdicao = it },
+                    aoCriar = { criando = true },
+                    diaAlvo = alvo,
+                    alturaDasSemanas = alturaDasSemanas,
+                    aoMedirDia = { data, limites -> areasDosDias[data.toString()] = limites },
+                )
+            }
+        }
 
         if (emDuasColunas) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -203,12 +175,13 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
                             top = Espaco.e2, bottom = Espaco.e5,
                         ),
                 ) {
-                    painel()
+                    grade()
                 }
+                // Largura fixa, como o `340px` do site: o que sobra e todo do
+                // mes, que e quem precisa de espaco para os dias nao espremerem.
                 ListaDeEventos(
                     visiveis = visiveis,
                     hoje = hoje,
-                    diaEscolhido = diaEscolhido,
                     arrastado = arrastado,
                     aoEditar = { emEdicao = it },
                     aoApagar = { vm.apagar(it) },
@@ -216,7 +189,7 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
                     aoMover = { ponto += it },
                     aoSoltar = soltar,
                     aoDesistir = { arrastado = null },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.width(LARGURA_DA_COLUNA_DE_EVENTOS),
                     recuoInicial = Espaco.e2,
                 )
             }
@@ -224,7 +197,6 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
             ListaDeEventos(
                 visiveis = visiveis,
                 hoje = hoje,
-                diaEscolhido = diaEscolhido,
                 arrastado = arrastado,
                 aoEditar = { emEdicao = it },
                 aoApagar = { vm.apagar(it) },
@@ -234,7 +206,7 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
                 aoDesistir = { arrastado = null },
                 modifier = Modifier.fillMaxSize(),
                 recuoInicial = Espaco.e5,
-                cabecalho = painel,
+                cabecalho = grade,
             )
         }
     }
@@ -256,236 +228,17 @@ fun CalendarioScreen(vm: CalendarioViewModel = viewModel()) {
         )
     }
 
-    emEdicao?.let { alvo ->
+    emEdicao?.let { emFoco ->
         FormularioDeEvento(
-            evento = alvo,
+            evento = emFoco,
             dataInicial = null,
             tags = tags,
             aoFechar = { emEdicao = null },
             aoSalvar = { titulo, descricao, quando, tag ->
-                vm.editar(alvo, titulo, descricao, quando, tag)
+                vm.editar(emFoco, titulo, descricao, quando, tag)
                 emEdicao = null
             },
         )
-    }
-}
-
-@Composable
-private fun ListaDeEventos(
-    visiveis: Map<String, List<EventoEntity>>,
-    hoje: LocalDate,
-    diaEscolhido: String?,
-    arrastado: EventoEntity?,
-    aoEditar: (EventoEntity) -> Unit,
-    aoApagar: (EventoEntity) -> Unit,
-    aoPegar: (EventoEntity, Offset) -> Unit,
-    aoMover: (Offset) -> Unit,
-    aoSoltar: () -> Unit,
-    aoDesistir: () -> Unit,
-    modifier: Modifier = Modifier,
-    recuoInicial: Dp = Espaco.e5,
-    cabecalho: (@Composable () -> Unit)? = null,
-) {
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(
-            start = recuoInicial, end = Espaco.e5, top = Espaco.e2, bottom = Espaco.e5,
-        ),
-        verticalArrangement = Arrangement.spacedBy(Espaco.e3),
-    ) {
-        if (cabecalho != null) {
-            item { cabecalho() }
-        }
-
-        if (visiveis.isEmpty()) {
-            item {
-                CartaoDaTela {
-                    Text(
-                        text = if (diaEscolhido == null) {
-                            "Nenhum evento por aqui."
-                        } else {
-                            "Nada marcado neste dia."
-                        },
-                        style = TipografiaBeazeth.bodyLarge,
-                        color = Doce.tintaSuave,
-                    )
-                    Text(
-                        text = if (diaEscolhido == null) {
-                            "Crie um acima, ou espere a sincronização trazer os que você " +
-                                "criou no site."
-                        } else {
-                            "Toque no dia de novo para ver o mês inteiro."
-                        },
-                        style = TipografiaBeazeth.bodyMedium,
-                        color = Doce.tintaSuave,
-                    )
-                }
-            }
-        }
-
-        for ((iso, doDia) in visiveis) {
-            item(key = iso) {
-                CartaoDaTela {
-                    CabecalhoDoDia(iso = iso, hoje = hoje)
-                    for (evento in doDia) {
-                        LinhaDeEvento(
-                            evento = evento,
-                            sendoArrastado = evento.id == arrastado?.id,
-                            aoTocar = { aoEditar(evento) },
-                            aoApagar = { aoApagar(evento) },
-                            aoPegar = aoPegar,
-                            aoMover = aoMover,
-                            aoSoltar = aoSoltar,
-                            aoDesistir = aoDesistir,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CabecalhoDoDia(iso: String, hoje: LocalDate) {
-    val data = runCatching { LocalDate.parse(iso) }.getOrNull()
-    val ehHoje = data == hoje
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-    ) {
-        Text(
-            text = data?.let { "%02d".format(it.dayOfMonth) } ?: "—",
-            style = TipografiaBeazeth.headlineMedium.copy(fontSize = 26.sp),
-            color = if (ehHoje) Doce.destaqueEscuro else Doce.tinta,
-        )
-        Column {
-            Text(
-                text = data?.let { "${MESES_CURTOS[it.monthValue - 1]} ${it.year}" } ?: iso,
-                style = TipografiaBeazeth.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = Doce.tintaSuave,
-            )
-            Text(
-                text = if (ehHoje) {
-                    "Hoje"
-                } else {
-                    data?.let { DIAS_LONGOS[it.dayOfWeek.value - 1] }.orEmpty()
-                },
-                style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
-                color = if (ehHoje) Doce.destaqueEscuro else Doce.tintaSuave,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LinhaDeEvento(
-    evento: EventoEntity,
-    sendoArrastado: Boolean,
-    aoTocar: () -> Unit,
-    aoApagar: () -> Unit,
-    aoPegar: (EventoEntity, Offset) -> Unit,
-    aoMover: (Offset) -> Unit,
-    aoSoltar: () -> Unit,
-    aoDesistir: () -> Unit,
-) {
-    val hora = runCatching {
-        LocalDateTime.parse(evento.eventDatetime).format(DateTimeFormatter.ofPattern("HH:mm"))
-    }.getOrDefault("--:--")
-    val tato = LocalHapticFeedback.current
-
-    // Onde esta linha esta NA JANELA. O dedo comeca aqui e termina noutro
-    // pedaco da arvore (a grade), entao os dois lados precisam falar a mesma
-    // lingua de coordenadas.
-    var lugar by remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { lugar = it }
-            .clip(RoundedCornerShape(12.dp))
-            .background(corDoHex(evento.tagColor).copy(alpha = if (sendoArrastado) 0.05f else 0.14f))
-            .clickable(onClick = aoTocar)
-            // Segurar e arrastar leva o evento para outro dia. Segurar, e nao
-            // arrastar direto: a lista rola no mesmo eixo, e um arrasto simples
-            // seria ambiguo entre "rolar" e "mover o evento".
-            .pointerInput(evento.id) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { local ->
-                        tato.performHapticFeedback(HapticFeedbackType.LongPress)
-                        aoPegar(evento, lugar?.localToWindow(local) ?: Offset.Zero)
-                    },
-                    onDragEnd = { aoSoltar() },
-                    onDragCancel = { aoDesistir() },
-                ) { mudanca, deslocamento ->
-                    mudanca.consume()
-                    aoMover(deslocamento)
-                }
-            }
-            .padding(Espaco.e2),
-        horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = hora,
-            style = TipografiaBeazeth.titleMedium.copy(fontSize = 14.sp),
-            color = Doce.tinta,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-
-        Box(
-            modifier = Modifier
-                .padding(top = 6.dp)
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(corDoHex(evento.tagColor)),
-        )
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = evento.title,
-                style = TipografiaBeazeth.bodyLarge.copy(fontSize = 15.sp),
-                color = Doce.tinta,
-            )
-            if (evento.description.isNotBlank()) {
-                Text(
-                    text = evento.description,
-                    style = TipografiaBeazeth.bodyMedium.copy(fontSize = 13.sp),
-                    color = Doce.tintaSuave,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = evento.tagLabel,
-                    style = TipografiaBeazeth.bodyMedium.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = Doce.tintaSuave,
-                )
-                // Ver o mesmo selo em `Postit`: sem conta ele nao diz nada.
-                if (evento.id < 0 && !LocalModoLocal.current) {
-                    Text(
-                        text = "não enviado",
-                        style = TipografiaBeazeth.bodyMedium.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        color = Doce.tintaSuave,
-                    )
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .clickable(onClick = aoApagar),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "×", fontSize = 18.sp, color = Doce.tintaSuave)
-        }
     }
 }
 
@@ -494,52 +247,24 @@ private fun horaDe(evento: EventoEntity): LocalDateTime? =
     runCatching { LocalDateTime.parse(evento.eventDatetime) }.getOrNull()
 
 /**
- * A copia que segue o dedo durante o arrasto.
+ * A partir daqui a lista cabe ao lado do mes sem espremer nenhum dos dois.
  *
- * `Popup` porque ela precisa sair de dentro da lista -- que rola e recorta -- e
- * passar por cima da grade do mes, que e justamente o destino. E o `Popup` ja
- * pensa em coordenadas de janela, as mesmas em que o dedo e as celulas foram
- * medidos: nao ha conversao nenhuma pelo caminho.
+ * Medida na area de CONTEUDO, e nao na janela: e ela que a grade tem para si. O
+ * corte equivalente do site e 1400 px de janela, dos quais a barra lateral come
+ * uns 300.
  */
-@Composable
-private fun FantasmaDoEvento(evento: EventoEntity, ponto: Offset) {
-    val cor = corDoHex(evento.tagColor)
-    Popup(
-        popupPositionProvider = remember(ponto) {
-            object : PopupPositionProvider {
-                override fun calculatePosition(
-                    anchorBounds: IntRect,
-                    windowSize: IntSize,
-                    layoutDirection: LayoutDirection,
-                    popupContentSize: IntSize,
-                ): IntOffset = IntOffset(
-                    (ponto.x - popupContentSize.width / 2f).roundToInt(),
-                    (ponto.y - popupContentSize.height / 2f).roundToInt(),
-                )
-            }
-        },
-    ) {
-        Row(
-            modifier = Modifier
-                .shadow(12.dp, RoundedCornerShape(12.dp))
-                .clip(RoundedCornerShape(12.dp))
-                .background(Doce.superficie)
-                .border(1.dp, cor, RoundedCornerShape(12.dp))
-                .padding(horizontal = Espaco.e3, vertical = Espaco.e2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(cor),
-            )
-            Text(
-                text = evento.title,
-                style = TipografiaBeazeth.bodyLarge.copy(fontSize = 14.sp),
-                color = Doce.tinta,
-            )
-        }
-    }
-}
+private val LARGURA_PARA_DUAS_COLUNAS = 900.dp
+
+/** O `340px` da coluna de "Próximos eventos" do site. */
+private val LARGURA_DA_COLUNA_DE_EVENTOS = 340.dp
+
+/**
+ * Tudo o que ocupa altura nesta tela menos as semanas: o recuo, o cartao, a
+ * barra do mes e a linha com os nomes dos dias.
+ *
+ * Serve para a grade saber quanto sobra e caber o mes inteiro sem rolagem.
+ * Estimativa de proposito -- medir de verdade custaria uma volta de composicao
+ * so para descobrir a altura de dois cabecalhos, e errar por alguns dp so faz a
+ * celula sair um fio mais alta ou mais baixa.
+ */
+private val ENFEITES_DA_GRADE = 176.dp
