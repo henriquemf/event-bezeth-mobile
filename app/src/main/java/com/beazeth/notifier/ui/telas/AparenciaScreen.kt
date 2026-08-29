@@ -31,7 +31,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
-import com.beazeth.notifier.ui.componentes.InterruptorEscuro
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.FONTES
@@ -45,12 +44,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * O Estudio de Aparencia, mais a conta e o estado da sincronizacao.
+ * O Estudio de Aparencia: dez paletas e dez duplas de fonte, e nada mais.
  *
- * As dez paletas e as dez duplas de fonte sao as mesmas do site, e a escolha se
- * ve no proprio botao: cada preview de tema desenha o degrade daquele tema, e
- * cada preview de fonte escreve na fonte que representa. E o que o site faz --
- * escolher pelo preview, nao por um nome numa lista.
+ * A escolha se ve no proprio botao -- cada preview de tema desenha o degrade
+ * daquele tema, e cada preview de fonte escreve na fonte que representa. E o
+ * que o site faz: escolher pelo preview, nao por um nome numa lista.
+ *
+ * **O modo escuro nao tem controle aqui.** Ele e uma chave so, e a lua da barra
+ * de cima esta em todas as telas, inclusive nesta -- o cartao que existia neste
+ * lugar era um segundo interruptor a dois centimetros do primeiro, e ainda
+ * ficava acima dos previews, empurrando para baixo o que a tela veio mostrar.
+ * O estado dele continua sendo lido ([escuro]), porque e ele que decide se os
+ * previews mostram as paletas claras ou as escuras.
  *
  * A escolha nao sobe para o servidor: no site ela vive no navegador, e aqui no
  * aparelho. Sao a mesma conta com aparencias independentes, e isso e proposital
@@ -72,8 +77,6 @@ class AparenciaViewModel(app: Application) : AndroidViewModel(app) {
     fun escolherTema(chave: String) = viewModelScope.launch { prefs.definirTema(chave) }
 
     fun escolherFonte(chave: String) = viewModelScope.launch { prefs.definirFonte(chave) }
-
-    fun alternarEscuro(ligado: Boolean) = viewModelScope.launch { prefs.definirEscuro(ligado) }
 }
 
 @Composable
@@ -90,34 +93,6 @@ fun AparenciaScreen(vm: AparenciaViewModel = viewModel()) {
         ),
         verticalArrangement = Arrangement.spacedBy(Espaco.e3),
     ) {
-        // ------------------------------------------------------- modo escuro
-        item {
-            CartaoDaTela {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Modo escuro",
-                            style = TipografiaBeazeth.titleMedium,
-                            color = cores.tinta,
-                        )
-                        Text(
-                            text = "Vale para qualquer uma das dez paletas.",
-                            style = TipografiaBeazeth.bodyMedium,
-                            color = cores.tintaSuave,
-                        )
-                    }
-                    // O mesmo controle da barra de cima, e nao um `Switch`
-                    // do Material: o site nao tem interruptor de trilho em
-                    // lugar nenhum, e ter dois desenhos para a mesma opcao
-                    // faria parecer que sao opcoes diferentes.
-                    InterruptorEscuro(escuro = escuro, aoAlternar = vm::alternarEscuro)
-                }
-            }
-        }
-
         // ------------------------------------------------------------ temas
         item {
             CartaoDaTela(titulo = "Preview de Temas") {

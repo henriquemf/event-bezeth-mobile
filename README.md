@@ -40,7 +40,7 @@ tem: a de perfil.
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
 | **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. |
-| **Aparência** | Dez paletas, dez fontes e modo escuro. Só isso: conta e sincronização saíram daqui para o perfil. |
+| **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
 | **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). No fim, o estado da sincronização e a saída da conta. |
 
 Fora das telas, na casca: a lateral com os widgets vivos de pomodoro e água (os
