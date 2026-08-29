@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,7 +27,6 @@ import com.beazeth.notifier.ui.LoginScreen
 import com.beazeth.notifier.ui.Sessao
 import com.beazeth.notifier.ui.SessaoViewModel
 import com.beazeth.notifier.ui.componentes.FundoDoce
-import com.beazeth.notifier.ui.componentes.RodapeDoAmor
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.theme.FONTE_PADRAO
@@ -124,24 +122,20 @@ private fun App(
         // nao dois destinos de navegacao. Um estado local basta -- um NavHost
         // aqui so acrescentaria pilha de historico para duas telas que se
         // alternam.
-        // O "EU TE AMO MOMO" tambem aqui: no `base.html` ele fica FORA do bloco
-        // da casca, entao as telas de entrar e criar conta o mostram igual.
-        Sessao.Fora -> ComRodape {
-            if (cadastrando) {
-                CriarContaScreen(
-                    estado = login,
-                    aoCriar = vm::criarConta,
-                    aoIrParaLogin = { cadastrando = false; vm.limparErro() },
-                    aoUsarSemConta = vm::usarSemConta,
-                )
-            } else {
-                LoginScreen(
-                    estado = login,
-                    aoEntrar = vm::entrar,
-                    aoIrParaCadastro = { cadastrando = true; vm.limparErro() },
-                    aoUsarSemConta = vm::usarSemConta,
-                )
-            }
+        Sessao.Fora -> if (cadastrando) {
+            CriarContaScreen(
+                estado = login,
+                aoCriar = vm::criarConta,
+                aoIrParaLogin = { cadastrando = false; vm.limparErro() },
+                aoUsarSemConta = vm::usarSemConta,
+            )
+        } else {
+            LoginScreen(
+                estado = login,
+                aoEntrar = vm::entrar,
+                aoIrParaCadastro = { cadastrando = true; vm.limparErro() },
+                aoUsarSemConta = vm::usarSemConta,
+            )
         }
         is Sessao.Dentro -> CascaApp(
             nome = s.nome,
@@ -159,15 +153,6 @@ private fun App(
             aoAlternarEscuro = aoAlternarEscuro,
             aoSair = vm::verTelaDeLogin,
         )
-    }
-}
-
-/** A tela por cima, a faixa embaixo. */
-@Composable
-private fun ComRodape(conteudo: @Composable () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) { conteudo() }
-        RodapeDoAmor()
     }
 }
 

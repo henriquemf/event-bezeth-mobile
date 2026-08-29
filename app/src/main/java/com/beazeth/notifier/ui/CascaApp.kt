@@ -34,7 +34,6 @@ import com.beazeth.notifier.ui.componentes.BarraInferior
 import com.beazeth.notifier.ui.componentes.BarraLateral
 import com.beazeth.notifier.ui.componentes.BarraSuperior
 import com.beazeth.notifier.ui.componentes.Destino
-import com.beazeth.notifier.ui.componentes.RodapeDoAmor
 import com.beazeth.notifier.ui.telas.AguaScreen
 import com.beazeth.notifier.ui.telas.AparenciaScreen
 import com.beazeth.notifier.ui.telas.PomodoroScreen
@@ -189,14 +188,8 @@ fun CascaApp(
             }
         }
 
-        // Depois da lateral e do conteudo, atravessando a janela inteira --
-        // como no `base.html`, em que a faixa vem depois de fechar a casca.
-        RodapeDoAmor()
-
         // A barra de baixo por ultimo, encostada na borda, porque e ela que a
-        // pessoa toca. No site ela e `position: fixed; bottom: 0` e o rodape
-        // passa por baixo; aqui, em fluxo, ficar depois dele da a mesma ordem
-        // visual. So existe onde nao coube a lateral.
+        // pessoa toca. So existe onde nao coube a lateral.
         if (!lateralCabe) {
             BarraInferior(atual = atual, aoTrocar = { nav.irPara(it) })
         }

@@ -130,7 +130,6 @@ Não é "parecido": é porte token a token, com o site aberto do lado.
 | `body` + `.bg-candy` | `FundoDoce`, os quatro degradês desenhados |
 | `.auth-card`, `.btn-primary`, `.event-form` | `ui/componentes/Doces.kt` |
 | `partials/sidebar.html` | `ui/componentes/BarraLateral.kt` |
-| `<footer class="site-love-footer">` | `ui/componentes/RodapeDoAmor.kt` |
 
 As paletas são geradas porque são 17 cores × 10 temas: um valor digitado errado
 não quebraria nada — só deixaria um tema levemente diferente do site, para
@@ -141,6 +140,11 @@ que os do site (ver `ui/theme/Tokens.kt`), o degradê do botão primário é
 calculado a partir do destaque em vez de terminar sempre em rosa, e o zoom do
 planner é em dois botões em vez de barra deslizante — um controle de 2 px de
 passo pede precisão que o dedo não tem.
+
+O `<footer class="site-love-footer">` (o "EU TE AMO MOMO") **não existe aqui**.
+No site ele é a última coisa de uma página que rola inteira, e só aparece quando
+se chega ao fim. No app não há esse fim: teria que ficar fixo na base, à vista o
+tempo todo, roubando 50 dp de altura de toda tela. Ficou no site, onde nasceu.
 
 ---
 
@@ -175,12 +179,22 @@ fontes, que existem justamente para o app não parecer outro produto.
 ## Gerar o .apk para instalar no tablet
 
 ```powershell
-.\empacotar.ps1
+.\gerar-apk.bat
 ```
 
+Só isso. Na primeira vez ele pede a senha da chave, confere que ela abre a chave
+**antes** de compilar, e guarda em `keystore.properties`; nas seguintes não
+pergunta mais. No fim abre a pasta com o arquivo já selecionado e deixa o caminho
+na área de transferência.
+
 Sai `dist\EventBeazeth-<versão>.apk`, assinado e pronto para mandar. Para subir
-a versão junto, `.\empacotar.ps1 -Versao 1.1.0`; para instalar no aparelho
+a versão junto, `.\gerar-apk.bat -Versao 1.1.0`; para instalar no aparelho
 conectado antes de mandar, acrescente `-Instalar`.
+
+O `.bat` é uma linha só chamando o `empacotar.ps1`, e existe por causa do
+`-ExecutionPolicy Bypass`: o Windows recusa rodar `.ps1` por clique duplo, com
+uma mensagem que parece defeito do script. A permissão vale só para aquela
+chamada; nada muda na máquina.
 
 O script existe porque quase toda etapa de "gerar o `.apk`" falha calada — o
 build termina bem e o problema só aparece no aparelho de quem recebeu:
@@ -188,7 +202,7 @@ build termina bem e o problema só aparece no aparelho de quem recebeu:
 | Passo | O que falha sem ele |
 | --- | --- |
 | achar o JDK 21 | o Gradle para com um erro que não diz qual Java ele queria |
-| exigir `keystore.properties` | o `.apk` sai **sem assinatura**, e não instala em lugar nenhum |
+| exigir a chave, e testar a senha antes | o `.apk` sai **sem assinatura**, e não instala em lugar nenhum |
 | conferir que o `apiBase` é `https` | o `.apk` instala, abre, e só o login falha — sem dizer por quê |
 | conferir a assinatura do arquivo **pronto** | assinado com a chave de depuração, ele instala hoje e nunca aceita atualização |
 | nomear com a versão | três `app-release.apk` na pasta de downloads e ninguém sabe qual é qual |
@@ -202,8 +216,9 @@ já tem o app teria que desinstalar, e o que estiver só no aparelho (post-it
 escrito offline) some junto.
 
 Por isso ela não está aqui. `keystore.properties` diz onde ela está e qual a
-senha, e é ignorado pelo git; ao lado dele há um `keystore.properties.exemplo`
-versionado, que explica o que preencher sem guardar o segredo. É a mesma chave
+senha, é escrito pelo próprio script na primeira execução, e é ignorado pelo
+git; ao lado dele há um `keystore.properties.exemplo` versionado, que explica o
+que preencher sem guardar o segredo. É a mesma chave
 que assina o app antigo (o TWA), na pasta vizinha — uma chave pode assinar dois
 apps, e é um arquivo insubstituível para guardar em vez de dois.
 
@@ -237,9 +252,9 @@ app/src/main/java/com/beazeth/notifier/
 │   └── local/               Room: entidades, DAOs e o banco
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando
 └── ui/
-    ├── CascaApp.kt          lateral ou barra inferior, barra de cima, rodapé
+    ├── CascaApp.kt          lateral ou barra inferior, e a barra de cima
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
-    ├── componentes/         o que se repete: cartão, campo, botão, lateral, rodapé
+    ├── componentes/         o que se repete: cartão, campo, botão, lateral
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
     └── theme/               tokens, paletas, fontes e tipografia
 ```
