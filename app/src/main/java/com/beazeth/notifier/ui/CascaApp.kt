@@ -84,6 +84,9 @@ fun CascaApp(
     aoAlternarEscuro: (Boolean) -> Unit,
     aoSair: () -> Unit,
     aoAtualizarConta: (String, String) -> Unit,
+    /** A rota que um aviso tocado pediu. Ver `MainActivity.rotaPedida`. */
+    rotaPedida: String? = null,
+    aoAtenderOPedido: () -> Unit = {},
     local: Boolean = false,
 ) {
     val contexto = LocalContext.current
@@ -112,6 +115,18 @@ fun CascaApp(
     }
 
     LaunchedEffect(atual) { recolhida = 0f }
+
+    // Tocar num aviso abre a tela do assunto: o lembrete de agua leva ao copo,
+    // o do pomodoro ao cronometro, o da agenda ao calendario.
+    //
+    // `aoAtenderOPedido` zera o pedido logo em seguida, e nao e detalhe: sem
+    // isso, sair da tela de agua para os post-its seria desfeito na proxima
+    // recomposicao, porque a rota pedida continuaria la mandando voltar.
+    LaunchedEffect(rotaPedida) {
+        val destino = Destino.porRota(rotaPedida) ?: return@LaunchedEffect
+        nav.irPara(destino)
+        aoAtenderOPedido()
+    }
 
     // Um pomodoro que terminou com o app fechado -- ou com a pessoa em outra
     // tela -- entra na conta do perfil aqui. E a casca porque ela esta em TODAS

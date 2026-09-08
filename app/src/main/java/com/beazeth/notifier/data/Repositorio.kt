@@ -1,6 +1,7 @@
 package com.beazeth.notifier.data
 
 import android.content.Context
+import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.local.AguaDiaEntity
 import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.data.local.BlocoEntity
@@ -322,6 +323,7 @@ class Repositorio(private val context: Context) {
             idProvisorio = id,
             entidade = Sincronizador.ALVO_EVENTOS,
         )
+        avisosDaAgendaMudaram()
         return id
     }
 
@@ -351,10 +353,14 @@ class Repositorio(private val context: Context) {
             },
             entidade = Sincronizador.ALVO_EVENTOS,
         )
+        avisosDaAgendaMudaram()
     }
 
     suspend fun apagarEvento(id: Long) {
         banco.eventos().apagar(id)
+        // Logo apos a escrita, e nao no fim: abaixo ha um `return` para o
+        // evento que nunca chegou ao servidor, e ele tambem some da agenda.
+        avisosDaAgendaMudaram()
         if (id < 0) {
             removerPendenciasDe(id)
             return
@@ -366,6 +372,16 @@ class Repositorio(private val context: Context) {
             entidade = Sincronizador.ALVO_EVENTOS,
         )
     }
+
+    /**
+     * Recalcula os alarmes da agenda depois de mexer nela.
+     *
+     * A sincronizacao ja faz isso ao terminar, mas ela pode nao terminar: quem
+     * cria um evento no elevador escreve no Room, a subida fica na fila, e sem
+     * esta chamada o lembrete so seria marcado quando a rede voltasse. Um
+     * evento para daqui a dez minutos passaria batido.
+     */
+    private suspend fun avisosDaAgendaMudaram() = Lembretes.rearmar(context)
 
     // ------------------------------------------------------------ planner
 

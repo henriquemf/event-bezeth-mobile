@@ -270,6 +270,13 @@ fun PerfilScreen(
             }
         }
 
+        // ------------------------------------------------------------ os avisos
+        //
+        // Aparece com e sem conta: os avisos nao dependem de servidor. O
+        // pomodoro e do aparelho, e um evento criado sem login mora no Room
+        // como qualquer outro.
+        item { CartaoDeAvisos() }
+
         // --------------------------------------------------- a sincronizacao
         //
         // Veio da tela de Aparencia: e assunto de CONTA, e la ficava no meio de
@@ -363,9 +370,15 @@ private fun Recado(estado: EstadoDoPerfil, campo: EstadoDoPerfil.Campo) {
     }
 }
 
-/** Rotulo a esquerda, valor a direita -- o mesmo par da tela de Aparencia. */
+/**
+ * Rotulo a esquerda, valor a direita -- o mesmo par da tela de Aparencia.
+ *
+ * `internal` e nao `private` porque o cartao de avisos, que mora em outro
+ * arquivo do mesmo pacote, mostra o estado no mesmo formato. Uma copia la sairia
+ * de sintonia com esta na primeira mudanca de estilo.
+ */
 @Composable
-private fun Linha(rotulo: String, valor: String) {
+internal fun Linha(rotulo: String, valor: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,

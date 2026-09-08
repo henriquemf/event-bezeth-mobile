@@ -3,6 +3,47 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Postar na barra de notificacao. Do Android 13 em diante e uma permissao
+         de RUNTIME: instalada, vem negada, e o app precisa pedir. Quem pede e a
+         `MainActivity`, na primeira abertura. Ate o 12 basta declarar. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Remarcar os alarmes depois de o aparelho religar. Sem isto, reiniciar o
+         tablet apaga a tabela de alarmes do sistema e o app fica mudo ate
+         alguem abri-lo. Ver `AoLigar`. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Alarme na hora exata, e nao "quando der".
+
+         Sao duas permissoes para o mesmo poder porque o Android trocou de
+         regra no meio do caminho:
+
+         - Ate o Android 11 nao era preciso pedir nada.
+         - No 12 surgiu SCHEDULE_EXACT_ALARM, concedida na instalacao (e
+           revogavel nos ajustes). Dai o `maxSdkVersion="32"`: do 13 em diante
+           ela deixa de ser concedida sozinha e passa a exigir uma visita aos
+           ajustes do sistema.
+         - No 13 surgiu USE_EXACT_ALARM, concedida na instalacao e sem visita
+           nenhuma, reservada a apps cuja funcao inclui despertador, cronometro
+           ou agenda.
+
+         Este app e os tres: o pomodoro e um cronometro que a pessoa arma
+         apertando um botao, e o calendario e uma agenda. Um pomodoro de 25
+         minutos que apita as 40 nao e um pomodoro — fora do alarme exato o
+         Android agrupa o trabalho para poupar bateria e o atraso e livre.
+
+         O preco: publicar na Play Store com USE_EXACT_ALARM exige preencher um
+         formulario de justificativa. Este `.apk` e instalado a mao (ver o
+         `empacotar.ps1`), entao a questao nao se coloca hoje — mas se um dia
+         se colocar, e aqui que ela esta escrita.
+
+         O codigo nao confia em nenhuma das duas: `marcarAlarme` pergunta ao
+         sistema antes e cai para o alarme inexato se a resposta for nao. -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
     <!-- Sem backup: o que o app guarda no aparelho e (a) um cache do que ja
          esta no servidor e (b) o token de acesso, que vale noventa dias e nao
          e revogavel um a um.
@@ -29,11 +70,37 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Beazeth"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Quem recebe os alarmes. `exported="false"`: so este app marca
+             alarmes para ele, e um `Intent` de fora nao tem por que fazer o app
+             recalcular a agenda. -->
+        <receiver
+            android:name=".avisos.Despertador"
+            android:exported="false" />
+
+        <!-- Este precisa ser `exported="true"`, porque quem manda os quatro
+             avisos e o SISTEMA, de fora do app. Os quatro sao "broadcasts
+             protegidos": so o proprio Android pode emiti-los, entao exportar
+             nao abre nada para outros apps.
+
+             Estao num receptor separado do `Despertador` justamente por isso:
+             juntos, exportar um exportaria o outro. -->
+        <receiver
+            android:name=".avisos.AoLigar"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

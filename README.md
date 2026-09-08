@@ -38,10 +38,14 @@ tem: a de perfil.
 | **Agenda** | Grade do mês no tamanho do site, com os eventos escritos dentro do dia (hora, título e o ponto da cor da tag) e os dias dos meses vizinhos em tom apagado. Ao lado, "Próximos eventos", que olha sempre de hoje para a frente. Tocar num dia acende a célula e já abre o formulário naquela data; tocar num evento abre ele; segurar um evento e largar em outro dia muda a data e preserva a hora. |
 | **Weekly Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
-| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. |
-| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. |
+| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim, avisa na barra de notificação, mesmo com o app fechado e a tela apagada. |
+| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. Avisa no intervalo e na janela escolhidos no site — e para de avisar quando a meta do dia é batida. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
-| **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). No fim, o estado da sincronização e a saída da conta. |
+| **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). No fim, o estado dos avisos, o da sincronização e a saída da conta. |
+
+A **Agenda** também avisa: na hora do evento, e — nas tags de regra "curso" — 15
+e 7 dias antes, seguindo a mesma regra que o site usa para mandar e-mail. Tocar
+num aviso abre o app já na tela do assunto.
 
 Fora das telas, na casca: a lateral com os widgets vivos de pomodoro e água (os
 mesmos do site), o botão de três barrinhas que a esconde, a barra de cima que
@@ -124,6 +128,73 @@ E entrar numa conta depois **não perde nada**: post-its, tarefas, blocos e
 eventos escritos sem conta são enfileirados como criações e sobem. Copos de água
 e aparência ficam de fora de propósito — copos são uma contagem do dia, e somar a
 local por cima da que a conta já tem contaria o mesmo copo duas vezes.
+
+### Os avisos são do aparelho, não do servidor
+
+O site avisa por *web push*: o servidor varre o banco de minuto em minuto e
+empurra a mensagem. O caminho óbvio seria repetir isso aqui com FCM — projeto no
+Firebase, chave de servidor, uma dependência a mais e uma ida à rede **no
+instante do aviso**.
+
+Não foi o escolhido, porque o aparelho **já sabe tudo o que precisa para avisar
+sozinho**. A configuração de água (ligado, intervalo, janela) e a agenda inteira
+já estão no Room, trazidas pela sincronização, e o pomodoro nunca saiu daqui. Um
+aviso local acerta com o celular em modo avião; um push dependeria de rede
+justamente no minuto em que ela pode faltar.
+
+**Um alarme por assunto, sempre o próximo.** Não há um alarme por evento: há um
+alarme de evento, marcado para o lembrete que vencer primeiro, e quando ele toca
+o próprio despertador calcula o seguinte e remarca. Cem eventos continuam sendo
+um alarme — e um evento apagado no site some do celular na sincronização
+seguinte, sem sobrar alarme órfão.
+
+**Nada é guardado sobre "o que já foi agendado".** Toda rodada lê o banco,
+recalcula os gatilhos e remarca, o que torna "recalcular" seguro de repetir — e
+ele é repetido de propósito, de cinco lugares: ao abrir o app, ao terminar cada
+sincronização, ao criar ou apagar um evento, ao religar o aparelho e a cada
+alarme que toca. O que impede o mesmo lembrete de ser entregue duas vezes é uma
+marca d'água (`avisoDeEventoAte`), e não uma tabela de entregues.
+
+**As regras dos eventos são as do site**, lidas de `_build_reminders` em
+`scheduler_service.py`: a tag diz se o evento avisa só na hora (`dia`) ou também
+15 e 7 dias antes (`curso`). Inventar um cronograma aqui seria o mesmo evento
+avisando em horas diferentes no e-mail e no celular.
+
+**O que o Android apaga sem avisar.** Religar o aparelho limpa a tabela de
+alarmes; instalar o `.apk` novo por cima faz o mesmo; parar o app à força
+também. Os dois primeiros chegam como *broadcast* e são atendidos por `AoLigar`;
+o terceiro se resolve no `onResume` da activity, que recalcula tudo a cada volta
+para o app.
+
+**Atraso tem limite.** Um aviso pode vencer com o aparelho desligado. Entregar
+todos os vencidos de uma vez seria uma avalanche de lembretes do que já passou,
+então cada tipo diz quanto atraso ainda vale: uma hora para "agora" (um aviso de
+compromisso da manhã que chega à tarde não lembra nada) e doze horas para os
+antecipados de curso, onde "faltam 15 dias" continua verdade meio dia depois.
+
+**Três canais, e não um.** Do Android 8 em diante quem decide som, vibração e se
+o aviso toma a tela é a pessoa, canal por canal. Um canal só transformaria "o
+lembrete de água está me atrapalhando" em "desliguei os avisos do app" — e junto
+iria o fim do pomodoro.
+
+**O som é um arquivo do app** (`res/raw/aviso_suave.wav`): um sino curto, de
+ataque macio, gerado com pico em 30% da escala. O toque padrão do sistema muda
+de aparelho para aparelho e é desenhado para *chamar*; num app que avisa várias
+vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A água não
+vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido duplo
+padrão.
+
+Uma armadilha que vale saber: **importância, som e vibração são copiados uma vez
+só, quando o canal nasce.** Depois disso o Android guarda a escolha da pessoa e
+ignora o código. Trocar o toque padrão de verdade exigiria canais com ids novos.
+
+**A água cala quando a meta foi batida** — e aqui o app se afasta do site de
+propósito. O servidor avisa a cada intervalo até a janela fechar, tenha a pessoa
+bebido oito copos ou nenhum. Num navegador aberto isso passa; num celular no
+bolso, seis avisos depois da meta cumprida são exatamente o que faz alguém
+desligar os avisos. A comparação confere a *data* da linha antes de calar: um
+aparelho sem sincronizar desde ontem, com a meta de ontem cumprida, ficaria mudo
+o dia inteiro de hoje. Na dúvida, avisa.
 
 ---
 
@@ -259,8 +330,15 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── TokenStore.kt        token, nome, e-mail, carimbo de sync e a marca do modo local
 │   ├── Perfil.kt            a foto (corte, giro e disco) e o nome de quem usa sem conta
 │   ├── Estatisticas.kt      as contas da tela de perfil, todas saindo do Room
-│   ├── Preferencias.kt      tema, fonte, modo escuro e o estado do pomodoro
+│   ├── Preferencias.kt      tema, fonte, modo escuro, estado do pomodoro e as marcas d'água dos avisos
 │   └── local/               Room: entidades, DAOs e o banco
+├── avisos/
+│   ├── Avisos.kt            os três canais, o som e o ato de postar
+│   ├── Alarmes.kt           o AlarmManager: um alarme por assunto, sempre o próximo
+│   ├── Lembretes.kt         quem decide o que avisar e quando tocar de novo
+│   ├── Agua.kt              a grade de horários da janela de hidratação
+│   ├── Eventos.kt           os gatilhos da agenda, com as regras do site
+│   └── Receptores.kt        o alarme tocou / o aparelho religou
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando
 └── ui/
     ├── CascaApp.kt          lateral ou barra inferior, e a barra de cima
@@ -270,9 +348,10 @@ app/src/main/java/com/beazeth/notifier/
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 50 arquivos Kotlin, ~11,8 mil linhas. **Nenhum passa de 700 linhas** — quando
+São 63 arquivos Kotlin, ~14,5 mil linhas. **Nenhum passa de 700 linhas** — quando
 um chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
-`calendario/` viraram pastas).
+`calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
+vez de um).
 
 ---
 
@@ -294,23 +373,45 @@ desligada no meio. Foi assim que apareceu o defeito que só existe fora do
 laboratório — o emulador em GMT e o servidor em GMT-3, com a tela de água pedindo
 o dia do *aparelho* enquanto o servidor conta pelo dia *dele*.
 
+### Conferir os avisos
+
+Aviso não se testa lendo código: ou ele chega, ou não chega. O que o emulador
+mostra, e nenhuma outra coisa mostra:
+
+- `adb shell dumpsys alarm` — se o alarme foi mesmo marcado, para que instante, e
+  se `exactAllowReason` diz que a permissão de hora exata valeu. É onde se vê que
+  remarcar SUBSTITUI o alarme em vez de empilhar outro.
+- `adb shell dumpsys notification` — o que foi postado: canal, texto, cor, e o
+  `mSound` do canal (que precisa apontar para `android.resource://…`, e não para
+  o toque do sistema).
+- **Religar o emulador sem abrir o app** e conferir se os alarmes voltaram. É a
+  única prova de que `BOOT_COMPLETED` está de pé; o app abrindo mascara o defeito,
+  porque o `onResume` remarcaria tudo de qualquer jeito.
+- **Reinstalar por cima** (`adb install -r`), que dispara `MY_PACKAGE_REPLACED` —
+  e, feito com `-PminifyDebug`, é o teste de R8 dos avisos: um receptor perdido no
+  encolhimento compila, instala e só falha calado.
+
+Foi um desses ciclos que pegou "Os **1** minutos de foco acabaram" — plural que
+nenhuma leitura de código tinha visto, porque um minuto é justamente o menor
+tempo que o slider oferece.
+
 ---
 
 ## O que ainda não existe
 
-- **Notificações.** É a queixa que iniciou o projeto e a única de pé: precisa de
-  FCM no servidor e de canal de notificação no app. Hoje o lembrete de água e o
-  de evento só acontecem com o site aberto.
 - **Redimensionar bloco do planner** arrastando a borda. Mover funciona; mudar a
   duração é pelo formulário — uma alça útil pede uns 24 dp, e um bloco de 15
   minutos tem 13 dp de altura no zoom padrão.
 - **Redimensionar post-it** pelo canto. Arrastar para mover funciona; o tamanho é
   o padrão de 232×216.
-- **Aviso ao terminar o pomodoro.** Ele sobrevive ao app fechado, mas ninguém é
-  avisado com a tela desligada — depende do mesmo canal de notificação acima.
 - **Configurar o lembrete de água** (meta do dia, tamanho do copo, intervalo, janela do
-  dia). O app lê a configuração e conta os copos com ela; mudar é no site, porque a API
-  do app só expõe leitura dela.
+  dia). O app lê a configuração, conta os copos com ela **e avisa por ela**; mudar
+  continua sendo no site, porque a API do app só expõe leitura. É a lacuna mais
+  incômoda que sobrou: quem usa só o celular não tem como escolher o intervalo, e
+  quem usa sem conta nunca recebeu uma configuração — e por isso não recebe o
+  lembrete de água. Pomodoro e agenda avisam nos dois casos.
+- **Adiar um aviso** pelo próprio aviso ("mais 10 minutos"). Hoje ele só abre a
+  tela do assunto.
 - **Foto de perfil na conta.** Ela fica no aparelho: reinstalar o app pede a foto
   de novo, e o site não a mostra. Guardá-la na conta pediria uma coluna de bytes
   num Postgres cobrado por byte, ou um serviço de arquivos novo — o disco do

@@ -221,12 +221,12 @@ fun BarraLateral(
                 BotaoDaLateral(
                     texto = if (pomodoro.correndo) "Pausar" else "Começar",
                     destacado = !pomodoro.correndo,
-                    aoTocar = { escopo.launch { alternarPomodoro(prefs, banco) } },
+                    aoTocar = { escopo.launch { alternarPomodoro(contexto, prefs, banco) } },
                     modifier = Modifier.weight(1f),
                 )
                 BotaoDaLateral(
                     texto = "Parar",
-                    aoTocar = { escopo.launch { zerarPomodoro(prefs, banco) } },
+                    aoTocar = { escopo.launch { zerarPomodoro(contexto, prefs, banco) } },
                     modifier = Modifier.weight(1f),
                 )
             }

@@ -37,6 +37,8 @@ class Preferencias(private val context: Context) {
     private val chavePomoFimEm = longPreferencesKey("pomo_fim_em")
     private val chavePomoRestante = intPreferencesKey("pomo_restante")
     private val chavePomoCreditado = longPreferencesKey("pomo_creditado")
+    private val chavePomoAvisado = longPreferencesKey("pomo_avisado")
+    private val chaveAvisoDeEvento = longPreferencesKey("aviso_de_evento_ate")
 
     val tema: Flow<String> = context.prefsAparencia.data.map { it[chaveTema] ?: PALETA_PADRAO }
     val fonte: Flow<String> = context.prefsAparencia.data.map { it[chaveFonte] ?: FONTE_PADRAO }
@@ -88,6 +90,45 @@ class Preferencias(private val context: Context) {
 
     suspend fun marcarPomodoroCreditado(fimEm: Long) {
         context.prefsAparencia.edit { it[chavePomoCreditado] = fimEm }
+    }
+
+    // -------------------------------------------------------------- avisos
+
+    /**
+     * O `pomoFimEm` do ultimo pomodoro que ja foi ANUNCIADO na barra.
+     *
+     * Irmao de [pomoCreditado], e pelo mesmo motivo: quem descobre que um
+     * pomodoro acabou pode ser o alarme, mas tambem pode ser o app reabrindo
+     * depois. Sem este carimbo, religar o aparelho reanunciaria um pomodoro que
+     * ja apitou.
+     *
+     * Separado do credito porque as duas perguntas sao diferentes -- "ja entrou
+     * na conta do perfil?" e "ja apareceu na barra?" -- e um pomodoro pode ter
+     * sido creditado com os avisos desligados.
+     */
+    val pomodoroAvisado: Flow<Long> =
+        context.prefsAparencia.data.map { it[chavePomoAvisado] ?: 0L }
+
+    suspend fun marcarPomodoroAvisado(fimEm: Long) {
+        context.prefsAparencia.edit { it[chavePomoAvisado] = fimEm }
+    }
+
+    /**
+     * Ate que instante os lembretes da agenda ja foram tratados.
+     *
+     * Nao ha tabela de "avisos entregues": os gatilhos sao recalculados do zero
+     * a cada rodada, e sem uma marca d'agua o lembrete de um evento seria
+     * reentregue toda vez -- e a agenda e recalculada a cada sincronizacao, a
+     * cada abertura do app e a cada alarme.
+     *
+     * Um `long` da conta porque os gatilhos sao percorridos em ordem de tempo:
+     * tudo que e anterior a marca ja passou pela decisao de entregar ou nao.
+     */
+    val avisoDeEventoAte: Flow<Long> =
+        context.prefsAparencia.data.map { it[chaveAvisoDeEvento] ?: 0L }
+
+    suspend fun marcarAvisoDeEventoAte(instante: Long) {
+        context.prefsAparencia.edit { it[chaveAvisoDeEvento] = instante }
     }
 
     suspend fun salvarPomodoro(minutos: Int, fimEm: Long, restante: Int) {

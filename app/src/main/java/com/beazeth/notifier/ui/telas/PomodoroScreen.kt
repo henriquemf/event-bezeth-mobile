@@ -1,6 +1,7 @@
 package com.beazeth.notifier.ui.telas
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.Ampulheta
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
@@ -163,8 +165,16 @@ internal suspend fun creditarPomodoroTerminado(prefs: Preferencias, banco: Banco
     prefs.marcarPomodoroCreditado(fimEm)
 }
 
-/** Começar/Pausar. Vale para a tela e para o widget da lateral. */
-internal suspend fun alternarPomodoro(prefs: Preferencias, banco: BancoLocal) {
+/**
+ * Começar/Pausar. Vale para a tela e para o widget da lateral.
+ *
+ * O [context] entra so para remarcar o alarme no fim: e ele que faz o "Tempo!"
+ * aparecer na barra de notificacao com o app fechado. Sem esta chamada, um
+ * pomodoro comecado e deixado de lado terminaria em silencio, e a pessoa so
+ * descobriria ao reabrir o app -- que e exatamente o que um cronometro existe
+ * para evitar.
+ */
+internal suspend fun alternarPomodoro(context: Context, prefs: Preferencias, banco: BancoLocal) {
     // Antes de mexer: se o que estava la ja tinha terminado, este toque e um
     // recomeço -- e o instante antigo, que identifica o pomodoro cumprido, esta
     // prestes a ser sobrescrito.
@@ -184,13 +194,17 @@ internal suspend fun alternarPomodoro(prefs: Preferencias, banco: BancoLocal) {
         val segundos = if (restante > 0) restante else minutos * 60
         prefs.salvarPomodoro(minutos, System.currentTimeMillis() + segundos * 1_000L, segundos)
     }
+    Lembretes.pomodoroMudou(context)
 }
 
 /** Zerar, de volta ao tempo cheio. */
-internal suspend fun zerarPomodoro(prefs: Preferencias, banco: BancoLocal) {
+internal suspend fun zerarPomodoro(context: Context, prefs: Preferencias, banco: BancoLocal) {
     creditarPomodoroTerminado(prefs, banco)
     val minutos = prefs.pomoMinutos.first()
     prefs.salvarPomodoro(minutos, 0L, minutos * 60)
+    // Desmarca: sem isto o alarme do pomodoro que acabou de ser zerado
+    // continuaria marcado e apitaria na hora em que ele TERIA terminado.
+    Lembretes.pomodoroMudou(context)
 }
 
 private fun segundosAte(instante: Long): Int =
@@ -198,15 +212,16 @@ private fun segundosAte(instante: Long): Int =
 
 class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
+    private val contexto = app.applicationContext
     private val prefs = Preferencias(app)
     private val banco = BancoLocal.obter(app)
 
     val estado = estadoDoPomodoro(prefs)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EstadoPomodoro())
 
-    fun alternar() = viewModelScope.launch { alternarPomodoro(prefs, banco) }
+    fun alternar() = viewModelScope.launch { alternarPomodoro(contexto, prefs, banco) }
 
-    fun zerar() = viewModelScope.launch { zerarPomodoro(prefs, banco) }
+    fun zerar() = viewModelScope.launch { zerarPomodoro(contexto, prefs, banco) }
 
     /** Chamado quando a contagem chega a zero com a tela aberta. */
     fun creditar() = viewModelScope.launch { creditarPomodoroTerminado(prefs, banco) }
@@ -217,6 +232,10 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         if (estado.value.correndo) return@launch
         val limpo = minutos.coerceIn(MIN_MINUTOS, MAX_MINUTOS)
         prefs.salvarPomodoro(limpo, 0L, limpo * 60)
+        // Trocar o tempo zera o instante de fim, entao o alarme que existia nao
+        // corresponde mais a nada. Arrastar o slider com uma contagem PAUSADA e
+        // o caminho que chega aqui com um alarme velho para desmarcar.
+        Lembretes.pomodoroMudou(contexto)
     }
 }
 

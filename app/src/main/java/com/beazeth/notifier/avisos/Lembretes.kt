@@ -1,0 +1,247 @@
+package com.beazeth.notifier.avisos
+
+import android.content.Context
+import com.beazeth.notifier.data.Preferencias
+import com.beazeth.notifier.data.local.BancoLocal
+import com.beazeth.notifier.ui.componentes.Destino
+import com.beazeth.notifier.ui.telas.creditarPomodoroTerminado
+import kotlinx.coroutines.flow.first
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+/**
+ * Quem decide o que avisar e quando tocar de novo.
+ *
+ * ## Recalcular do zero, sempre
+ *
+ * Nao ha estado guardado sobre "o que ja foi agendado". Toda rodada le o banco,
+ * calcula os gatilhos de novo e remarca. E o que torna [rearmar] seguro de
+ * chamar de qualquer lugar e quantas vezes for -- e chamam mesmo: ao abrir o
+ * app, ao terminar cada sincronizacao, ao criar um evento, ao religar o
+ * aparelho e a cada alarme que toca.
+ *
+ * A alternativa -- manter uma lista do que ja esta marcado e ir corrigindo --
+ * seria um segundo estado para sair de sincronia com o primeiro. Um evento
+ * apagado no site continuaria avisando no celular ate alguem notar.
+ *
+ * ## Marca d'agua em vez de tabela de entregues
+ *
+ * Se tudo e recalculado, o que impede o mesmo lembrete de ser entregue a cada
+ * rodada e `Preferencias.avisoDeEventoAte`: um instante ate o qual a agenda ja
+ * foi resolvida. Gatilho anterior a marca nao volta a ser considerado.
+ *
+ * ## Atraso tem limite
+ *
+ * Um aviso pode vencer com o aparelho desligado, ou com o app parado a forca --
+ * e o Android CANCELA todos os alarmes de um app que foi parado a forca, ate
+ * ele rodar de novo. Quando a agenda volta a ser calculada, ha gatilhos
+ * vencidos na mao, e entregar todos seria uma avalanche de lembretes de coisas
+ * que ja passaram. Cada [Antecedencia] diz quanto atraso ainda vale a pena; o
+ * que passou disso avanca a marca d'agua em silencio.
+ */
+object Lembretes {
+
+    /**
+     * Recalcula e remarca os tres alarmes, entregando o que estiver vencido
+     * dentro da tolerancia.
+     *
+     * O contexto vira `applicationContext` na entrada: isto e chamado de
+     * `BroadcastReceiver` e de composables, e guardar um contexto de tela num
+     * `PendingIntent` que vive horas e vazamento na certa.
+     */
+    suspend fun rearmar(context: Context) {
+        val app = context.applicationContext
+        garantirCanais(app)
+        resolverAgenda(app)
+        remarcarAgua(app)
+        remarcarPomodoro(app)
+    }
+
+    /** O alarme de [tipo] tocou. */
+    suspend fun tocou(context: Context, tipo: Tipo) {
+        val app = context.applicationContext
+        garantirCanais(app)
+        when (tipo) {
+            Tipo.AGUA -> {
+                entregarAgua(app)
+                remarcarAgua(app)
+            }
+            Tipo.POMODORO -> {
+                entregarPomodoro(app)
+                remarcarPomodoro(app)
+            }
+            // A agenda resolve entrega e remarcacao na mesma passada: as duas
+            // saem da mesma lista ordenada de gatilhos, e percorre-la duas
+            // vezes so daria chance de as duas discordarem.
+            Tipo.EVENTO -> resolverAgenda(app)
+        }
+    }
+
+    // ---------------------------------------------------------------- agua
+
+    /**
+     * Entrega o lembrete de agua.
+     *
+     * So e chamado quando o alarme TOCA, e nao em toda remarcacao -- ao
+     * contrario da agenda. Perder um lembrete de agua nao e perda: o proximo
+     * vem no intervalo seguinte. Entregar em toda remarcacao faria o app tocar
+     * o sininho de novo a cada abertura e a cada sincronizacao, que e o caminho
+     * mais curto para os avisos serem desligados.
+     */
+    private suspend fun entregarAgua(context: Context) {
+        val banco = BancoLocal.obter(context)
+        val config = banco.agua().observarConfig().first()
+        if (config == null || !config.enabled) return
+        if (metaJaBatida(banco.agua().observarDiaMaisRecente().first(), config, LocalDate.now())) {
+            return
+        }
+
+        avisar(
+            context = context,
+            canal = Canal.AGUA,
+            id = idDoAviso("agua"),
+            titulo = TITULO_DA_AGUA,
+            texto = TEXTO_DA_AGUA,
+            rota = Destino.AGUA.rota,
+        )
+    }
+
+    private suspend fun remarcarAgua(context: Context) {
+        val config = BancoLocal.obter(context).agua().observarConfig().first()
+        val proximo = proximoCopo(config, LocalDateTime.now())
+        if (proximo == null) {
+            desmarcarAlarme(context, Tipo.AGUA)
+        } else {
+            marcarAlarme(context, Tipo.AGUA, emMilissegundos(proximo))
+        }
+    }
+
+    // -------------------------------------------------------------- agenda
+
+    /**
+     * Entrega os lembretes vencidos e marca o alarme para o proximo.
+     *
+     * A lista vem ordenada por instante, entao o primeiro gatilho no futuro e
+     * exatamente o proximo alarme -- e o laco pode parar ali.
+     */
+    private suspend fun resolverAgenda(context: Context) {
+        val prefs = Preferencias(context)
+        val eventos = BancoLocal.obter(context).eventos().observar().first()
+        val agora = System.currentTimeMillis()
+        val marca = prefs.avisoDeEventoAte.first()
+
+        var ultimoVencido = 0L
+        var proximo = 0L
+
+        for (gatilho in gatilhosDaAgenda(eventos)) {
+            val quando = emMilissegundos(gatilho.quando)
+            if (quando > agora) {
+                proximo = quando
+                break
+            }
+
+            // Ja resolvido numa rodada anterior. Nao mexe na marca: ela so
+            // anda para a frente.
+            if (quando <= marca) continue
+
+            ultimoVencido = quando
+            if (agora - quando <= gatilho.antecedencia.tolerancia.toMillis()) {
+                avisar(
+                    context = context,
+                    canal = Canal.EVENTOS,
+                    id = gatilho.id,
+                    titulo = gatilho.titulo,
+                    texto = gatilho.texto,
+                    rota = Destino.CALENDARIO.rota,
+                )
+            }
+        }
+
+        // Avanca mesmo pelo que NAO foi entregue por atraso: eles ja foram
+        // julgados, e deixa-los para tras faria a proxima rodada julga-los de
+        // novo, para sempre.
+        if (ultimoVencido > 0L) prefs.marcarAvisoDeEventoAte(ultimoVencido)
+
+        if (proximo > 0L) {
+            marcarAlarme(context, Tipo.EVENTO, proximo)
+        } else {
+            desmarcarAlarme(context, Tipo.EVENTO)
+        }
+    }
+
+    /**
+     * O cronometro mudou: começou, pausou, zerou ou trocou de tempo.
+     *
+     * Existe separado de [rearmar] porque estes quatro toques acontecem no meio
+     * de uma interacao, e recalcular a agenda inteira -- que nao mudou -- a
+     * cada aperto de botao seria trabalho a toa na thread de quem esta olhando.
+     */
+    suspend fun pomodoroMudou(context: Context) = remarcarPomodoro(context.applicationContext)
+
+    // ------------------------------------------------------------ pomodoro
+
+    /**
+     * Anuncia o fim da contagem -- e credita o pomodoro na conta do perfil.
+     *
+     * O credito acontece aqui tambem, e nao so nas telas, porque este e o
+     * primeiro momento em que alguem SABE que o pomodoro acabou: um pomodoro
+     * que termina com o app fechado so entrava na conta na proxima vez que o
+     * app fosse aberto. Reusa a funcao que ja existia em vez de repetir a
+     * regra; o carimbo `pomoCreditado` faz a chamada repetida nao contar duas
+     * vezes.
+     */
+    private suspend fun entregarPomodoro(context: Context) {
+        val prefs = Preferencias(context)
+        val fimEm = prefs.pomoFimEm.first()
+        if (fimEm <= 0L || System.currentTimeMillis() < fimEm) return
+        if (prefs.pomodoroAvisado.first() == fimEm) return
+
+        creditarPomodoroTerminado(prefs, BancoLocal.obter(context))
+        prefs.marcarPomodoroAvisado(fimEm)
+
+        val minutos = prefs.pomoMinutos.first()
+        avisar(
+            context = context,
+            canal = Canal.POMODORO,
+            id = idDoAviso("pomodoro"),
+            titulo = "Tempo! 🍎",
+            // O caso de um minuto nao e hipotese: e o menor tempo que o slider
+            // oferece, e foi assim que "Os 1 minutos de foco acabaram" apareceu
+            // no primeiro teste de verdade.
+            texto = if (minutos == 1) {
+                "O minuto de foco acabou."
+            } else {
+                "Os $minutos minutos de foco acabaram."
+            },
+            rota = Destino.POMODORO.rota,
+        )
+    }
+
+    /**
+     * Marca o alarme para o fim da contagem, se ela estiver correndo.
+     *
+     * Contagem parada ou ja vencida desmarca. Nao anuncia nada: um pomodoro que
+     * venceu com o app parado ja aparece como "Tempo!" na tela e no widget da
+     * lateral assim que alguem olha -- avisar na barra horas depois seria um
+     * susto, nao um lembrete.
+     */
+    private suspend fun remarcarPomodoro(context: Context) {
+        val fimEm = Preferencias(context).pomoFimEm.first()
+        if (fimEm > System.currentTimeMillis()) {
+            marcarAlarme(context, Tipo.POMODORO, fimEm)
+        } else {
+            desmarcarAlarme(context, Tipo.POMODORO)
+        }
+    }
+}
+
+/**
+ * Hora local em milissegundos do relogio.
+ *
+ * O banco guarda hora LOCAL sem fuso (o servidor tambem), e os alarmes sao
+ * marcados em milissegundos absolutos. A conversao usa o fuso do aparelho:
+ * "14:00" quer dizer duas da tarde onde a pessoa esta.
+ */
+private fun emMilissegundos(quando: LocalDateTime): Long =
+    quando.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

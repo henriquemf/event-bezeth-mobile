@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Segura o toque dos avisos contra o encolhedor de recursos.
+
+    `shrinkResources` (ligado so no release) apaga do `.apk` todo recurso que
+    ele nao consegue enxergar sendo usado, e `aviso_suave.wav` e um desses: o
+    unico uso dele e um `R.raw.aviso_suave` interpolado dentro de uma string,
+    montando `android.resource://<pacote>/<id>` em `Avisos.garantirCanais`. O
+    encolhedor nao segue esse caminho, e o arquivo sumiu do release enquanto
+    continuava presente no debug.
+
+    Como isso QUASE passou: o `.apk` compila, instala e abre igual. Os avisos
+    continuam chegando — so que mudos, porque o canal aponta para um som que
+    nao existe mais. Nao ha erro em lugar nenhum.
+
+    E por que o teste de R8 do projeto (`-PminifyDebug`) nao pegou: aquele
+    caminho liga o R8 do CODIGO, mas nao `shrinkResources`, que existe so no
+    release. Recurso que some e um modo de falha diferente do de classe que
+    some, e precisa ser conferido no arquivo pronto:
+
+        unzip -l dist/EventBeazeth-x.y.z.apk | grep -c '\.wav'
+
+    (No release os nomes vem ofuscados, tipo `res/T-.ttf`, entao procure pela
+    EXTENSAO e nao pelo nome.)
+
+    E sim: este comentario nao pode conter dois hifens seguidos. O encolhedor
+    LE este arquivo, e o build quebra com um `ParseError` sem dizer onde.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/aviso_suave" />

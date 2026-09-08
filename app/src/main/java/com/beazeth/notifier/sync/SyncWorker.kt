@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.Sincronizador
 import java.util.concurrent.TimeUnit
 
@@ -27,7 +28,18 @@ class SyncWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = when (Sincronizador(applicationContext).rodar()) {
-        is Sincronizador.Fim.Ok -> Result.success()
+        is Sincronizador.Fim.Ok -> {
+            // A sincronizacao e a unica porta por onde entra mudanca vinda do
+            // SITE: um evento criado no computador, um intervalo de agua
+            // ajustado por la. Sem recalcular aqui, esse evento so passaria a
+            // avisar na proxima vez que alguem abrisse o app -- possivelmente
+            // depois da hora dele.
+            //
+            // Vale tambem para a rodada de hora em hora, o que da ao aparelho
+            // uma segunda chance periodica de acertar os alarmes.
+            Lembretes.rearmar(applicationContext)
+            Result.success()
+        }
 
         // `retry` e nao `failure`: o WorkManager reagenda sozinho, com espera
         // crescente. Dizer `failure` aqui descartaria a fila em cima de uma
