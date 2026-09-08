@@ -3,45 +3,75 @@ package com.beazeth.notifier.ui.telas.perfil
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.beazeth.notifier.avisos.Canal
+import com.beazeth.notifier.avisos.Lembretes
+import com.beazeth.notifier.avisos.Som
 import com.beazeth.notifier.avisos.alarmeExatoLiberado
 import com.beazeth.notifier.avisos.podeAvisar
+import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.theme.Doce
+import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.TipografiaBeazeth
+import kotlinx.coroutines.launch
 
 /**
- * O cartao que diz se os avisos estao mesmo chegando.
+ * Onde os avisos se ajustam: o que avisa, com que som, e se o sistema deixa.
  *
- * ## Por que uma tela para isto
+ * ## Por que ha uma chave aqui se o Android ja tem a dele
  *
- * A permissao de avisar e pedida uma vez, na primeira abertura. Quem tocar em
- * "Não permitir" nunca mais ve aquela caixa -- o Android nao a mostra de novo,
- * por mais que o app peça. Sem este cartao, o app ficaria mudo para sempre e
- * pareceria quebrado: o pomodoro terminaria em silencio, o lembrete de agua
- * nunca chegaria, e nada na tela explicaria por que.
+ * Parecem duas chaves para a mesma coisa -- e o projeto ja pagou por isso uma
+ * vez, quando o modo escuro tinha tres interruptores. A diferenca aqui e de
+ * SIGNIFICADO, nao de lugar:
  *
- * O estado e RELIDO a cada volta para o app, e nao lido uma vez: o caminho
- * inteiro passa por sair daqui para os ajustes do sistema e voltar. Sem a
- * releitura, quem acabasse de ligar os avisos continuaria vendo "desligados" e
- * concluiria que nao adiantou.
+ * - A chave do sistema decide se o aviso **aparece**. O app continua acordando
+ *   o aparelho na hora certa e postando um aviso que ninguem ve.
+ * - A chave daqui decide se o lembrete **existe**. Desligada, o alarme e
+ *   desmarcado: o aparelho para de ser acordado, e a bateria para de ser gasta.
+ *
+ * Fora que a do sistema mora tres telas fundo dos ajustes do Android, e esta
+ * mora onde a pessoa esta.
+ *
+ * ## O estado do sistema e RELIDO a cada volta
+ *
+ * A permissao e pedida uma vez, na primeira abertura. Quem tocar em "Não
+ * permitir" nunca mais ve aquela caixa, e sem este cartao o app ficaria mudo
+ * para sempre parecendo quebrado. O caminho de conserto passa por sair daqui
+ * para os ajustes e voltar -- e sem reler no `ON_RESUME`, quem acabasse de
+ * ligar continuaria vendo "desligados".
  */
 @Composable
 internal fun CartaoDeAvisos() {
     val contexto = LocalContext.current
     val cores = Doce
     val dono = LocalLifecycleOwner.current
+    val escopo = rememberCoroutineScope()
+    val prefs = remember { Preferencias(contexto.applicationContext) }
 
     var ligados by remember { mutableStateOf(podeAvisar(contexto)) }
     var naHoraCerta by remember { mutableStateOf(alarmeExatoLiberado(contexto)) }
@@ -57,6 +87,8 @@ internal fun CartaoDeAvisos() {
         onDispose { dono.lifecycle.removeObserver(observador) }
     }
 
+    val som by prefs.somDoAviso.collectAsStateWithLifecycle("")
+
     CartaoDaTela(titulo = "Avisos") {
         Linha(rotulo = "Lembretes", valor = if (ligados) "ligados" else "desligados")
 
@@ -69,9 +101,8 @@ internal fun CartaoDeAvisos() {
                     "Os avisos chegam, mas podem atrasar: o sistema não está " +
                         "deixando o app marcar alarmes na hora exata."
                 else ->
-                    "Você é avisada quando o pomodoro acaba, na hora de beber água e " +
-                        "quando um evento da agenda chega. Cada um tem a sua chave nos " +
-                        "ajustes, se algum incomodar."
+                    "Chegam mesmo com o app fechado e a tela apagada. Tocar num " +
+                        "aviso abre a tela do assunto."
             },
             style = TipografiaBeazeth.bodyMedium,
             color = cores.tintaSuave,
@@ -88,15 +119,130 @@ internal fun CartaoDeAvisos() {
                 aoTocar = { contexto.startActivity(ajustesDeAlarme(contexto.packageName)) },
             )
         }
+
+        // ------------------------------------------------------ o que avisa
+        Subtitulo("O que avisar")
+
+        for (canal in Canal.entries) {
+            val marcado by prefs.avisoLigado(canal.base).collectAsStateWithLifecycle(true)
+            ChaveDeAviso(
+                titulo = canal.titulo,
+                descricao = canal.descricao,
+                marcado = marcado,
+                aoMudar = { novo ->
+                    escopo.launch {
+                        prefs.definirAviso(canal.base, novo)
+                        // Sem isto a escolha so valeria no proximo recalculo:
+                        // desligar deixaria o alarme ja marcado tocar mais uma
+                        // vez, e religar nao remarcaria nada ate o app reabrir.
+                        Lembretes.rearmar(contexto)
+                    }
+                },
+            )
+        }
+
+        // ------------------------------------------- a tela bloqueada
+        Subtitulo("Na tela bloqueada")
+
+        val mostrarNome by prefs.nomeDoEventoNaTelaBloqueada
+            .collectAsStateWithLifecycle(true)
+
+        ChaveDeAviso(
+            titulo = "Mostrar o nome do evento",
+            descricao = "Desligado, aparece só \"um compromisso seu\", sem dizer qual.",
+            marcado = mostrarNome,
+            aoMudar = { novo ->
+                escopo.launch { prefs.definirNomeDoEventoNaTelaBloqueada(novo) }
+            },
+        )
+
+        Text(
+            text = "Água e pomodoro sempre aparecem por inteiro — \"hora de beber " +
+                "água\" não revela nada de ninguém.",
+            style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
+            color = cores.tintaSuave,
+        )
+
+        // ------------------------------------------------------------- o som
+        Subtitulo("Som")
+
+        EscolhaDeSom(
+            escolhido = Som.porChave(som),
+            aoEscolher = { novo ->
+                escopo.launch {
+                    prefs.definirSomDoAviso(novo.chave)
+                    // Trocar o som TROCA O CANAL DE LUGAR (ver `Som`), entao o
+                    // canal novo precisa nascer agora -- senao o proximo aviso
+                    // sairia por um canal que ainda nao existe.
+                    Lembretes.rearmar(contexto)
+                }
+            },
+        )
+
+        Text(
+            text = "O toque escolhido vale para os três. Se quiser um som diferente " +
+                "em cada um, ou mudar a vibração, isso fica nos ajustes do Android.",
+            style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
+            color = cores.tintaSuave,
+        )
+    }
+}
+
+@Composable
+private fun Subtitulo(texto: String) {
+    Text(
+        text = texto,
+        style = TipografiaBeazeth.labelLarge,
+        color = Doce.tintaSuave,
+        modifier = Modifier.padding(top = Espaco.e2),
+    )
+}
+
+@Composable
+private fun ChaveDeAviso(
+    titulo: String,
+    descricao: String,
+    marcado: Boolean,
+    aoMudar: (Boolean) -> Unit,
+) {
+    val cores = Doce
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = titulo,
+                style = TipografiaBeazeth.titleMedium,
+                color = cores.tinta,
+            )
+            Text(
+                text = descricao,
+                style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
+                color = cores.tintaSuave,
+            )
+        }
+        Switch(
+            checked = marcado,
+            onCheckedChange = aoMudar,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = cores.superficie,
+                checkedTrackColor = cores.destaque,
+                checkedBorderColor = cores.destaque,
+                uncheckedThumbColor = cores.tintaSuave,
+                uncheckedTrackColor = cores.fundoCampo,
+                uncheckedBorderColor = cores.traco,
+            ),
+        )
     }
 }
 
 /**
  * A tela de avisos DESTE app, e nao a lista de todos os apps.
  *
- * `ACTION_APP_NOTIFICATION_SETTINGS` cai direto nos tres canais -- agua,
- * pomodoro e agenda --, que e onde a pessoa resolve tanto "esta tudo
- * desligado" quanto "so o da agua me incomoda".
+ * `ACTION_APP_NOTIFICATION_SETTINGS` cai direto nos canais, que e onde a pessoa
+ * resolve tanto "esta tudo desligado" quanto "quero outra vibracao".
  */
 private fun ajustesDeAviso(pacote: String): Intent =
     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)

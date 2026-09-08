@@ -35,7 +35,6 @@ import com.beazeth.notifier.ui.Sessao
 import com.beazeth.notifier.ui.SessaoViewModel
 import com.beazeth.notifier.avisos.EXTRA_DESTINO
 import com.beazeth.notifier.avisos.Lembretes
-import com.beazeth.notifier.avisos.garantirCanais
 import com.beazeth.notifier.ui.componentes.FundoDoce
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.data.Preferencias
@@ -75,11 +74,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         esconderBarrasDoSistema()
 
-        // Antes de qualquer aviso: os canais precisam existir para aparecerem
-        // nos ajustes do sistema, e quem quer desligar so o lembrete de agua
-        // nao deveria ter de esperar o primeiro aviso chegar para encontrar a
-        // chave. Ver `garantirCanais`.
-        garantirCanais(applicationContext)
         rotaPedida = intent?.getStringExtra(EXTRA_DESTINO)
         pedirPermissaoDeAvisar()
 
@@ -127,12 +121,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Recalcula os alarmes toda vez que o app volta a frente.
+     * Recalcula os alarmes toda vez que o app volta a frente, e cria os canais.
      *
      * E a rede de seguranca dos casos em que o Android apaga os alarmes sem
      * mandar aviso nenhum -- parar o app a forca pelos ajustes e o principal.
      * `Lembretes.rearmar` recalcula tudo do zero, entao repetir nao custa nada
      * alem de duas leituras de banco.
+     *
+     * Os canais nascem aqui dentro (e nao no `onCreate`) porque criar um canal
+     * hoje depende de LER o toque escolhido, que mora no DataStore -- disco,
+     * portanto corrotina. Isto roda no primeiro instante depois do `onCreate`,
+     * entao continua valendo o que importava: um canal que nunca foi criado nao
+     * aparece nos ajustes do sistema, e quem quiser calar so a agua precisa
+     * encontrar a chave la sem esperar o primeiro aviso chegar.
      */
     override fun onResume() {
         super.onResume()

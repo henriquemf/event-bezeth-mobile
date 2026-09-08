@@ -39,6 +39,8 @@ class Preferencias(private val context: Context) {
     private val chavePomoCreditado = longPreferencesKey("pomo_creditado")
     private val chavePomoAvisado = longPreferencesKey("pomo_avisado")
     private val chaveAvisoDeEvento = longPreferencesKey("aviso_de_evento_ate")
+    private val chaveSomDoAviso = stringPreferencesKey("som_do_aviso")
+    private val chaveNomeNaTelaBloqueada = booleanPreferencesKey("nome_na_tela_bloqueada")
 
     val tema: Flow<String> = context.prefsAparencia.data.map { it[chaveTema] ?: PALETA_PADRAO }
     val fonte: Flow<String> = context.prefsAparencia.data.map { it[chaveFonte] ?: FONTE_PADRAO }
@@ -93,6 +95,59 @@ class Preferencias(private val context: Context) {
     }
 
     // -------------------------------------------------------------- avisos
+
+    /**
+     * Quais assuntos avisam. A chave e o `Canal.base` -- "agua", "pomodoro",
+     * "eventos".
+     *
+     * Chega LIGADO por padrao: quem instala um app de lembretes espera ser
+     * lembrado, e quem nao quiser desliga em dois toques. O contrario seria um
+     * app que so funciona depois de alguem descobrir que precisa liga-lo.
+     *
+     * Desligado aqui nao e "o Android nao mostra": e o app **nao agendar**. O
+     * alarme e desmarcado, e o aparelho para de ser acordado a toa.
+     */
+    fun avisoLigado(chave: String): Flow<Boolean> =
+        context.prefsAparencia.data.map { it[booleanPreferencesKey("aviso_$chave")] ?: true }
+
+    suspend fun definirAviso(chave: String, ligado: Boolean) {
+        context.prefsAparencia.edit { it[booleanPreferencesKey("aviso_$chave")] = ligado }
+    }
+
+    /**
+     * O nome do evento aparece na tela bloqueada, ou so "um compromisso seu"?
+     *
+     * Chega LIGADO: quem pos um lembrete quer le-lo de relance, sem digitar o
+     * PIN, e num aparelho pessoal isso quase sempre e o que se quer. Desligado
+     * e para quem deixa o tablet na mesa da sala.
+     *
+     * A escolha existe porque o Android nao a oferece de um jeito util: ele so
+     * tem um "esconder conteudo sensivel" que vale para o aparelho inteiro, e
+     * do Android 15 em diante ele nem usa mais o resumo que o app oferece --
+     * troca a linha toda por "conteudo oculto". Ou o aviso e legivel, ou nao ha
+     * aviso legivel nenhum; e essa decisao e de quem usa.
+     */
+    val nomeDoEventoNaTelaBloqueada: Flow<Boolean> =
+        context.prefsAparencia.data.map { it[chaveNomeNaTelaBloqueada] ?: true }
+
+    suspend fun definirNomeDoEventoNaTelaBloqueada(mostrar: Boolean) {
+        context.prefsAparencia.edit { it[chaveNomeNaTelaBloqueada] = mostrar }
+    }
+
+    /**
+     * O toque escolhido, pela chave do enum `Som`.
+     *
+     * Vazio quando ninguem escolheu ainda, e nao "sino": quem traduz chave em
+     * som e `Som.porChave`, que ja devolve o padrao para o que nao reconhece.
+     * Repetir o nome do padrao aqui seria uma segunda verdade para desencontrar
+     * da primeira no dia em que o padrao mudar.
+     */
+    val somDoAviso: Flow<String> =
+        context.prefsAparencia.data.map { it[chaveSomDoAviso] ?: "" }
+
+    suspend fun definirSomDoAviso(chave: String) {
+        context.prefsAparencia.edit { it[chaveSomDoAviso] = chave }
+    }
 
     /**
      * O `pomoFimEm` do ultimo pomodoro que ja foi ANUNCIADO na barra.

@@ -1,6 +1,7 @@
 package com.beazeth.notifier.avisos
 
 import android.content.Context
+import androidx.core.app.NotificationCompat
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.ui.componentes.Destino
@@ -52,7 +53,7 @@ object Lembretes {
      */
     suspend fun rearmar(context: Context) {
         val app = context.applicationContext
-        garantirCanais(app)
+        garantirCanais(app, somEscolhido(app))
         resolverAgenda(app)
         remarcarAgua(app)
         remarcarPomodoro(app)
@@ -61,7 +62,7 @@ object Lembretes {
     /** O alarme de [tipo] tocou. */
     suspend fun tocou(context: Context, tipo: Tipo) {
         val app = context.applicationContext
-        garantirCanais(app)
+        garantirCanais(app, somEscolhido(app))
         when (tipo) {
             Tipo.AGUA -> {
                 entregarAgua(app)
@@ -90,6 +91,7 @@ object Lembretes {
      * mais curto para os avisos serem desligados.
      */
     private suspend fun entregarAgua(context: Context) {
+        if (!ligado(context, Canal.AGUA)) return
         val banco = BancoLocal.obter(context)
         val config = banco.agua().observarConfig().first()
         if (config == null || !config.enabled) return
@@ -100,6 +102,7 @@ object Lembretes {
         avisar(
             context = context,
             canal = Canal.AGUA,
+            som = somEscolhido(context),
             id = idDoAviso("agua"),
             titulo = TITULO_DA_AGUA,
             texto = TEXTO_DA_AGUA,
@@ -109,7 +112,14 @@ object Lembretes {
 
     private suspend fun remarcarAgua(context: Context) {
         val config = BancoLocal.obter(context).agua().observarConfig().first()
-        val proximo = proximoCopo(config, LocalDateTime.now())
+        // Desligado no app desmarca o alarme, e nao so cala a entrega: sem
+        // isto o aparelho continuaria sendo acordado de hora em hora para
+        // descobrir que nao ha nada a fazer.
+        val proximo = if (ligado(context, Canal.AGUA)) {
+            proximoCopo(config, LocalDateTime.now())
+        } else {
+            null
+        }
         if (proximo == null) {
             desmarcarAlarme(context, Tipo.AGUA)
         } else {
@@ -126,10 +136,19 @@ object Lembretes {
      * exatamente o proximo alarme -- e o laco pode parar ali.
      */
     private suspend fun resolverAgenda(context: Context) {
+        if (!ligado(context, Canal.EVENTOS)) {
+            desmarcarAlarme(context, Tipo.EVENTO)
+            return
+        }
+
         val prefs = Preferencias(context)
         val eventos = BancoLocal.obter(context).eventos().observar().first()
         val agora = System.currentTimeMillis()
         val marca = prefs.avisoDeEventoAte.first()
+        // Lidos uma vez, e nao dentro do laco: varios eventos podem vencer na
+        // mesma passada, e cada leitura e uma ida ao disco.
+        val som = somEscolhido(context)
+        val mostrarNome = prefs.nomeDoEventoNaTelaBloqueada.first()
 
         var ultimoVencido = 0L
         var proximo = 0L
@@ -150,10 +169,19 @@ object Lembretes {
                 avisar(
                     context = context,
                     canal = Canal.EVENTOS,
+                    som = som,
                     id = gatilho.id,
                     titulo = gatilho.titulo,
                     texto = gatilho.texto,
                     rota = Destino.CALENDARIO.rota,
+                    // Mostrando o nome, o aviso e PUBLIC e nao ha o que
+                    // esconder; escondendo, ele e PRIVATE e leva o resumo.
+                    resumoPublico = if (mostrarNome) null else gatilho.textoPublico,
+                    visibilidade = if (mostrarNome) {
+                        NotificationCompat.VISIBILITY_PUBLIC
+                    } else {
+                        NotificationCompat.VISIBILITY_PRIVATE
+                    },
                 )
             }
         }
@@ -200,19 +228,25 @@ object Lembretes {
         creditarPomodoroTerminado(prefs, BancoLocal.obter(context))
         prefs.marcarPomodoroAvisado(fimEm)
 
+        // Depois de creditar, e nao antes: o pomodoro entra na conta do perfil
+        // mesmo com o aviso desligado. Uma coisa e nao querer ser interrompida;
+        // outra e perder as horas de foco do proprio historico.
+        if (!ligado(context, Canal.POMODORO)) return
+
         val minutos = prefs.pomoMinutos.first()
         avisar(
             context = context,
             canal = Canal.POMODORO,
+            som = somEscolhido(context),
             id = idDoAviso("pomodoro"),
-            titulo = "Tempo! 🍎",
+            titulo = "Tempo, momo! 🍎",
             // O caso de um minuto nao e hipotese: e o menor tempo que o slider
             // oferece, e foi assim que "Os 1 minutos de foco acabaram" apareceu
             // no primeiro teste de verdade.
             texto = if (minutos == 1) {
-                "O minuto de foco acabou."
+                "Um minuto de foco. Agora levanta, espreguiça e bebe uma água 💗"
             } else {
-                "Os $minutos minutos de foco acabaram."
+                "$minutos minutos de foco. Agora levanta, espreguiça e bebe uma água 💗"
             },
             rota = Destino.POMODORO.rota,
         )
@@ -228,12 +262,22 @@ object Lembretes {
      */
     private suspend fun remarcarPomodoro(context: Context) {
         val fimEm = Preferencias(context).pomoFimEm.first()
-        if (fimEm > System.currentTimeMillis()) {
+        if (fimEm > System.currentTimeMillis() && ligado(context, Canal.POMODORO)) {
             marcarAlarme(context, Tipo.POMODORO, fimEm)
         } else {
             desmarcarAlarme(context, Tipo.POMODORO)
         }
     }
+
+    // ------------------------------------------------------------ escolhas
+
+    /** Este assunto avisa? Ver `Preferencias.avisoLigado`. */
+    private suspend fun ligado(context: Context, canal: Canal): Boolean =
+        Preferencias(context).avisoLigado(canal.base).first()
+
+    /** O toque escolhido. */
+    private suspend fun somEscolhido(context: Context): Som =
+        Som.porChave(Preferencias(context).somDoAviso.first())
 }
 
 /**

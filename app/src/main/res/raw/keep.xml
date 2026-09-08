@@ -3,9 +3,9 @@
     Segura o toque dos avisos contra o encolhedor de recursos.
 
     `shrinkResources` (ligado so no release) apaga do `.apk` todo recurso que
-    ele nao consegue enxergar sendo usado, e `aviso_suave.wav` e um desses: o
-    unico uso dele e um `R.raw.aviso_suave` interpolado dentro de uma string,
-    montando `android.resource://<pacote>/<id>` em `Avisos.garantirCanais`. O
+    ele nao consegue enxergar sendo usado, e os toques sao desses: o unico uso
+    de cada um e um `R.raw.…` guardado num campo do enum `Som` e depois
+    interpolado numa string, montando `android.resource://<pacote>/<id>`. O
     encolhedor nao segue esse caminho, e o arquivo sumiu do release enquanto
     continuava presente no debug.
 
@@ -28,4 +28,4 @@
 -->
 <resources
     xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/aviso_suave" />
+    tools:keep="@raw/aviso_sino,@raw/aviso_gota,@raw/aviso_harpa" />

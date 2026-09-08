@@ -41,7 +41,7 @@ tem: a de perfil.
 | **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim, avisa na barra de notificação, mesmo com o app fechado e a tela apagada. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. Avisa no intervalo e na janela escolhidos no site — e para de avisar quando a meta do dia é batida. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
-| **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). No fim, o estado dos avisos, o da sincronização e a saída da conta. |
+| **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). Os avisos: quais existem, com que som (com botão de ouvir), e o que a tela bloqueada mostra. No fim, a sincronização e a saída da conta. |
 
 A **Agenda** também avisa: na hora do evento, e — nas tags de regra "curso" — 15
 e 7 dias antes, seguindo a mesma regra que o site usa para mandar e-mail. Tocar
@@ -177,16 +177,57 @@ o aviso toma a tela é a pessoa, canal por canal. Um canal só transformaria "o
 lembrete de água está me atrapalhando" em "desliguei os avisos do app" — e junto
 iria o fim do pomodoro.
 
-**O som é um arquivo do app** (`res/raw/aviso_suave.wav`): um sino curto, de
-ataque macio, gerado com pico em 30% da escala. O toque padrão do sistema muda
+**O som é um arquivo do app** (`res/raw/aviso_*.wav`): sinos curtos, de ataque
+macio, gerados com pico entre 26% e 30% da escala. O toque padrão do sistema muda
 de aparelho para aparelho e é desenhado para *chamar*; num app que avisa várias
 vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A água não
 vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido duplo
 padrão.
 
-Uma armadilha que vale saber: **importância, som e vibração são copiados uma vez
-só, quando o canal nasce.** Depois disso o Android guarda a escolha da pessoa e
-ignora o código. Trocar o toque padrão de verdade exigiria canais com ids novos.
+**Importância, som e vibração são copiados uma vez só, quando o canal nasce.**
+Depois disso o Android guarda a escolha da pessoa e ignora o código — e nem
+apagar e recriar resolve, porque ele lembra dos ajustes de um canal apagado e os
+restaura quando um canal com o *mesmo id* reaparece.
+
+É por isso que trocar o toque pelo app **troca o canal de lugar**: o id carrega a
+escolha (`pomodoro_gota` é outro canal que `pomodoro_sino`), o novo nasce e o
+velho é apagado. Quem já tiver ajustado aquele canal à mão nos ajustes do sistema
+perde o ajuste — aceitável, porque foi a própria pessoa que acabou de pedir a
+troca.
+
+### O que dá para ajustar dentro do app
+
+Na tela de perfil, no cartão **Avisos**:
+
+- **Quais avisos existem** — uma chave por assunto. Parece a mesma chave que o
+  Android já tem, e não é: a do sistema decide se o aviso **aparece** (o app
+  continua acordando o aparelho e postando um aviso que ninguém vê); a daqui
+  decide se o lembrete **existe** — desligada, o alarme é desmarcado e o aparelho
+  para de ser acordado.
+- **O som**, entre três toques do app, o toque do aparelho e "sem som", com um
+  botão **Ouvir** em cada. Ouvir antes de escolher não é enfeite: "Gotinha" não
+  diz se o som é discreto ou irritante, e sem a prévia o único jeito de descobrir
+  seria escolher e esperar o próximo lembrete — que, no caso da agenda, pode
+  levar dias.
+- **Se o nome do evento aparece na tela bloqueada.**
+
+### A tela bloqueada
+
+Água e pomodoro são `VISIBILITY_PUBLIC`: "hora de beber água" e "acabou o tempo"
+não revelam nada de ninguém, e são justamente os que precisam ser lidos de
+relance, sem digitar o PIN.
+
+A agenda é escolha, porque o nome de um evento pode ser assunto de quem o marcou
+— "Consulta" na tela de bloqueio é visível para quem passar perto da mesa. O
+padrão é mostrar; a chave está no cartão.
+
+E uma descoberta que só apareceu no emulador: **do Android 15 em diante o sistema
+ignora o `publicVersion`** — aquela versão reduzida que o app oferece para ser
+mostrada no lugar da real. Ele troca a linha inteira por "conteúdo oculto" e
+pronto. Conferido com a versão pública chegando corretamente ao `dumpsys` e não
+aparecendo na tela. Ela continua sendo enviada porque vale nas versões
+anteriores, mas o efeito prático é binário: ou o aviso é legível, ou não há aviso
+legível nenhum. Daí a chave existir.
 
 **A água cala quando a meta foi batida** — e aqui o app se afasta do site de
 propósito. O servidor avisa a cada intervalo até a janela fechar, tenha a pessoa
@@ -333,7 +374,8 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Preferencias.kt      tema, fonte, modo escuro, estado do pomodoro e as marcas d'água dos avisos
 │   └── local/               Room: entidades, DAOs e o banco
 ├── avisos/
-│   ├── Avisos.kt            os três canais, o som e o ato de postar
+│   ├── Avisos.kt            os três canais, a visibilidade e o ato de postar
+│   ├── Som.kt               os toques, e por que trocar de som troca o canal de lugar
 │   ├── Alarmes.kt           o AlarmManager: um alarme por assunto, sempre o próximo
 │   ├── Lembretes.kt         quem decide o que avisar e quando tocar de novo
 │   ├── Agua.kt              a grade de horários da janela de hidratação
@@ -348,7 +390,7 @@ app/src/main/java/com/beazeth/notifier/
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 63 arquivos Kotlin, ~14,5 mil linhas. **Nenhum passa de 700 linhas** — quando
+São 65 arquivos Kotlin, ~15,1 mil linhas. **Nenhum passa de 700 linhas** — quando
 um chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
 `calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
 vez de um).

@@ -2,6 +2,7 @@ package com.beazeth.notifier.avisos
 
 import com.beazeth.notifier.data.local.EventoEntity
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -29,7 +30,15 @@ import java.time.format.DateTimeFormatter
  */
 internal enum class Antecedencia(
     val chave: String,
-    val rotulo: String,
+    /** A primeira linha do aviso, na voz do app. */
+    val chamada: String,
+    /**
+     * O que a tela bloqueada mostra quando esconde o nome do evento.
+     *
+     * Diz que HA um lembrete e para quando, sem dizer qual -- que e o
+     * suficiente para a pessoa decidir se vale desbloquear.
+     */
+    val resumoPublico: String,
     val dias: Long,
     /** Ver [Lembretes] -- quanto atraso ainda vale a pena entregar. */
     val tolerancia: Duration,
@@ -38,7 +47,13 @@ internal enum class Antecedencia(
      * Na hora marcada. Uma hora de tolerancia: um aviso de "agora" que chega
      * de tarde, para um compromisso da manha, nao lembra nada -- so assusta.
      */
-    AGORA("event_now", "agora", 0, Duration.ofHours(1)),
+    AGORA(
+        chave = "event_now",
+        chamada = "É agora, meu amorzinho 💗",
+        resumoPublico = "Um compromisso seu começa agora.",
+        dias = 0,
+        tolerancia = Duration.ofHours(1),
+    ),
 
     /**
      * Os dois antecipados da regra `curso`. Doze horas de tolerancia porque
@@ -46,8 +61,22 @@ internal enum class Antecedencia(
      * porque o aparelho passou a manha desligado seria pior do que recebe-lo
      * na hora do almoco.
      */
-    QUINZE_DIAS("course_15_days", "em 15 dias", 15, Duration.ofHours(12)),
-    SETE_DIAS("course_7_days", "em 7 dias", 7, Duration.ofHours(12)),
+    QUINZE_DIAS(
+        chave = "course_15_days",
+        chamada = "Faltam 15 dias, momo 💗",
+        resumoPublico = "Um compromisso seu é daqui a 15 dias.",
+        dias = 15,
+        tolerancia = Duration.ofHours(12),
+    ),
+    SETE_DIAS(
+        chave = "course_7_days",
+        // "Falta uma semana" e a mesma informacao que "faltam 7 dias" e cai
+        // melhor no ouvido -- e o aviso e para ser lido, nao conferido.
+        chamada = "Falta uma semana, momo 💗",
+        resumoPublico = "Um compromisso seu é daqui a uma semana.",
+        dias = 7,
+        tolerancia = Duration.ofHours(12),
+    ),
 }
 
 /** Um aviso concreto: qual evento, com que antecedencia, em que instante. */
@@ -64,11 +93,33 @@ internal data class Gatilho(
     val texto: String
         get() {
             val rotulo = evento.tagLabel.ifBlank { "Evento" }
-            val quandoEscrito = dataDoEvento(evento)?.format(FORMATO) ?: evento.eventDatetime
-            val cabeca = "$rotulo ${antecedencia.rotulo} · $quandoEscrito"
+            val cabeca = "${antecedencia.chamada}\n$rotulo · ${quandoPorExtenso()}"
             val descricao = evento.description.trim()
             return if (descricao.isEmpty()) cabeca else "$cabeca\n$descricao"
         }
+
+    /** O que a tela bloqueada mostra quando esconde o nome do evento. */
+    val textoPublico: String
+        get() = "${antecedencia.resumoPublico}\n${quandoPorExtenso()}"
+
+    /**
+     * "hoje às 16:49" em vez de "08/09/2026 16:49".
+     *
+     * A data cheia e o formato do E-MAIL, que pode ser lido dias depois e
+     * precisa se bastar. Um aviso no celular chega no momento e some ao ser
+     * tocado: ali "hoje" e "amanha" sao mais rapidos de entender do que uma
+     * data que a pessoa tem de comparar com o calendario de cabeca.
+     */
+    private fun quandoPorExtenso(): String {
+        val quando = dataDoEvento(evento) ?: return evento.eventDatetime
+        val hoje = LocalDate.now()
+        val dia = when (quando.toLocalDate()) {
+            hoje -> "hoje"
+            hoje.plusDays(1) -> "amanhã"
+            else -> quando.format(DIA_E_MES)
+        }
+        return "$dia às ${quando.format(HORA)}"
+    }
 }
 
 /**
@@ -102,5 +153,5 @@ internal fun dataDoEvento(evento: EventoEntity): LocalDateTime? {
     return runCatching { LocalDateTime.parse(completo) }.getOrNull()
 }
 
-/** O mesmo formato do e-mail que o servidor manda. */
-private val FORMATO = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+private val DIA_E_MES = DateTimeFormatter.ofPattern("dd/MM")
+private val HORA = DateTimeFormatter.ofPattern("HH:mm")

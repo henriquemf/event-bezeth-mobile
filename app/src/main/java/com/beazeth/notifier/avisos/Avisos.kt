@@ -38,30 +38,60 @@ import com.beazeth.notifier.R
  * desenhado para CHAMAR: ataque seco e volume cheio. Num app que avisa varias
  * vezes ao dia isso cansa, e cansar e o que faz alguem desligar tudo.
  *
- * `res/raw/aviso_suave.wav` e um sino curto, de ataque macio, gravado com pico
- * em 30% da escala -- ou seja, ele nasce baixo, e nao so parece baixo. Sendo um
- * arquivo do app, soa igual em qualquer aparelho.
+ * Os toques em `res/raw/` sao sinos curtos, de ataque macio, gerados com pico
+ * entre 26% e 30% da escala -- ou seja, nascem baixos, e nao so parecem baixos.
+ * Sendo arquivos do app, soam igual em qualquer aparelho. Qual deles vale e
+ * escolha de quem usa, na tela de perfil; ver [Som].
  *
  * ## O que esta escrito aqui vale SO NA CRIACAO do canal
  *
  * Importancia, som e vibracao sao copiados uma unica vez, quando o canal nasce.
  * Dali em diante quem manda e a pessoa, nos ajustes do sistema, e o Android
  * IGNORA o que o codigo pedir -- mudar um valor deste arquivo nao mexe em quem
- * ja instalou. E o comportamento certo (ninguem quer uma atualizacao religando
- * um som que desligou a mao), mas tem um preco a lembrar: para trocar o toque
- * padrao de verdade seria preciso criar canais com IDs NOVOS e apagar os
- * velhos. Nenhuma versao publicada ate hoje tinha canal nenhum, entao estes
- * aqui sao os primeiros e ainda estao livres.
+ * ja instalou. E o comportamento certo: ninguem quer uma atualizacao religando
+ * um som que desligou a mao.
+ *
+ * E por isso que trocar o toque pelo app **troca o canal de lugar** em vez de
+ * mexer no que existe: o id carrega a escolha (`pomodoro_gota`), e o canal
+ * velho e apagado. Ver [Som] para o detalhe de por que apagar e recriar com o
+ * mesmo id NAO funcionaria.
+ *
+ * ## O que a tela bloqueada mostra
+ *
+ * Num aparelho com PIN, o Android pode trocar o texto de um aviso por
+ * "conteudo oculto" na tela de bloqueio -- e ai o lembrete chega, mas nao diz
+ * nada. Quem decide e a [visibilidade] de cada aviso, e ela nao e a mesma para
+ * os tres:
+ *
+ * - **Agua e pomodoro sao PUBLIC.** "Hora de beber agua" e "acabou o tempo" nao
+ *   revelam nada de ninguem, e sao justamente os que precisam ser lidos de
+ *   relance, sem desbloquear.
+ * - **A agenda depende de uma escolha**, porque o nome de um evento pode ser
+ *   assunto de quem o marcou -- "Consulta" na tela de bloqueio e visivel para
+ *   quem passar perto da mesa. O padrao e mostrar (quem pos o lembrete quer
+ *   le-lo de relance); a chave esta no cartao de avisos do perfil.
+ *
+ * Quando a agenda fica PRIVATE, o aviso leva junto uma versao publica dizendo
+ * que HA um lembrete e para quando, sem dizer qual. **Do Android 15 em diante
+ * o sistema ignora essa versao** e troca a linha inteira pelo "conteudo oculto"
+ * dele -- conferido no emulador, com a versao publica chegando corretamente ao
+ * `dumpsys` e nao aparecendo na tela. Ela fica porque continua valendo nas
+ * versoes anteriores, e porque nao custa nada.
  */
 enum class Canal(
-    val id: String,
+    /**
+     * A raiz do id do canal. O id de verdade leva o som junto
+     * (`pomodoro_gota`) -- ver [idCom] e [Som].
+     */
+    val base: String,
     val titulo: String,
     val descricao: String,
     val importancia: Int,
     val vibra: Boolean,
+    val visibilidade: Int,
 ) {
     AGUA(
-        id = "agua",
+        base = "agua",
         titulo = "Beber água",
         descricao = "No intervalo e na janela escolhidos na tela de hidratação.",
         // DEFAULT e nao HIGH: e um empurraozinho de rotina. Aparece na barra e
@@ -70,9 +100,10 @@ enum class Canal(
         // no dia, e o que mais cansa se insistir.
         importancia = NotificationManager.IMPORTANCE_DEFAULT,
         vibra = false,
+        visibilidade = NotificationCompat.VISIBILITY_PUBLIC,
     ),
     POMODORO(
-        id = "pomodoro",
+        base = "pomodoro",
         titulo = "Pomodoro",
         descricao = "Quando a contagem chega ao fim.",
         // HIGH: quem pos um cronometro quer saber na hora, e este e o unico
@@ -81,14 +112,19 @@ enum class Canal(
         // mesmo sino baixo dos outros.
         importancia = NotificationManager.IMPORTANCE_HIGH,
         vibra = true,
+        visibilidade = NotificationCompat.VISIBILITY_PUBLIC,
     ),
     EVENTOS(
-        id = "eventos",
+        base = "eventos",
         titulo = "Agenda",
         descricao = "Os lembretes dos eventos do calendário.",
         importancia = NotificationManager.IMPORTANCE_HIGH,
         vibra = true,
-    ),
+        visibilidade = NotificationCompat.VISIBILITY_PRIVATE,
+    );
+
+    /** O id do canal deste assunto com [som] tocando. Ver [Som]. */
+    fun idCom(som: Som): String = "${base}_${som.chave}"
 }
 
 /** Extra que diz a [MainActivity] em que tela abrir. Ver `CascaApp`. */
@@ -122,17 +158,19 @@ internal fun idDoAviso(nome: String): Int = nome.hashCode()
  * aparece nos ajustes do sistema. Sem isto, quem fosse desligar so o lembrete
  * de agua nao encontraria a chave ate o primeiro aviso ter chegado.
  */
-fun garantirCanais(context: Context) {
+fun garantirCanais(context: Context, som: Som) {
     val gerente = context.getSystemService(NotificationManager::class.java) ?: return
-    val toque = Uri.parse("android.resource://${context.packageName}/${R.raw.aviso_suave}")
+    val toque = som.uri(context)
     val comoTocar = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_NOTIFICATION)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
         .build()
 
+    val atuais = Canal.entries.map { it.idCom(som) }.toSet()
+
     for (canal in Canal.entries) {
         gerente.createNotificationChannel(
-            NotificationChannel(canal.id, canal.titulo, canal.importancia).apply {
+            NotificationChannel(canal.idCom(som), canal.titulo, canal.importancia).apply {
                 description = canal.descricao
                 setSound(toque, comoTocar)
                 enableVibration(canal.vibra)
@@ -142,6 +180,20 @@ fun garantirCanais(context: Context) {
                 if (canal.vibra) vibrationPattern = longArrayOf(0, 120)
             },
         )
+    }
+
+    // Os canais do som ANTERIOR, que nao valem mais. Sem isto os ajustes do
+    // sistema encheriam de "Pomodoro" repetido, um por som ja experimentado, e
+    // nao haveria como saber qual esta valendo.
+    //
+    // A comparacao aceita o id sem sufixo (`agua`) porque foi assim que os
+    // canais nasceram na primeira versao dos avisos, antes de haver escolha de
+    // som -- quem instalou aquela tem tres canais orfaos para limpar.
+    for (existente in gerente.notificationChannels) {
+        val nosso = Canal.entries.any {
+            existente.id == it.base || existente.id.startsWith("${it.base}_")
+        }
+        if (nosso && existente.id !in atuais) gerente.deleteNotificationChannel(existente.id)
     }
 }
 
@@ -168,15 +220,54 @@ fun podeAvisar(context: Context): Boolean =
 fun avisar(
     context: Context,
     canal: Canal,
+    som: Som,
     id: Int,
     titulo: String,
     texto: String,
     rota: String,
+    resumoPublico: String? = null,
+    /** Sobrepoe a [Canal.visibilidade] padrao. Ver o cartao de avisos do perfil. */
+    visibilidade: Int = canal.visibilidade,
 ) {
     if (!podeAvisar(context)) return
-    garantirCanais(context)
+    garantirCanais(context, som)
 
-    val aviso = NotificationCompat.Builder(context, canal.id)
+    val aviso = montar(context, canal, som, id, titulo, texto, rota)
+        .setVisibility(visibilidade)
+        // A versao que aparece no lugar da outra quando a tela bloqueada esta
+        // escondendo conteudo. So os avisos de canal PRIVATE precisam dela; nos
+        // outros o Android nem olha.
+        .apply {
+            if (resumoPublico != null) {
+                setPublicVersion(
+                    montar(context, canal, som, id, TITULO_GENERICO, resumoPublico, rota)
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                        .build(),
+                )
+            }
+        }
+        .build()
+
+    NotificationManagerCompat.from(context).notify(id, aviso)
+}
+
+/**
+ * O corpo comum de um aviso.
+ *
+ * Existe porque o aviso e a versao publica dele sao o MESMO cartao com outro
+ * texto -- mesmo icone, mesma cor, mesmo destino ao tocar. Montar os dois na
+ * mao deixaria os dois saindo de sintonia na primeira mudanca de estilo.
+ */
+private fun montar(
+    context: Context,
+    canal: Canal,
+    som: Som,
+    id: Int,
+    titulo: String,
+    texto: String,
+    rota: String,
+): NotificationCompat.Builder =
+    NotificationCompat.Builder(context, canal.idCom(som))
         .setSmallIcon(R.drawable.ic_aviso)
         .setColor(COR_DA_MARCA)
         .setContentTitle(titulo)
@@ -186,11 +277,11 @@ fun avisar(
         // cabe.
         .setStyle(NotificationCompat.BigTextStyle().bigText(texto))
         .setContentIntent(aoTocar(context, id, rota))
+        .setVisibility(canal.visibilidade)
         .setAutoCancel(true)
-        .build()
 
-    NotificationManagerCompat.from(context).notify(id, aviso)
-}
+/** O que a tela bloqueada mostra no lugar de um evento, quando esconde. */
+private const val TITULO_GENERICO = "Lembrete da agenda 💗"
 
 /**
  * O toque no aviso abre o app JA na tela do assunto.
