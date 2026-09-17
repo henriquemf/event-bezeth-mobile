@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.componentes.Copo
@@ -40,10 +41,12 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
- * Beber agua: quantos copos hoje, e a meta.
+ * Beber agua: quantos copos hoje, a meta, e o historico.
  *
  * O toque no copo grava no aparelho e acende na hora. A subida acontece depois
  * -- e por isso o botao nunca fica esperando resposta, mesmo com o servidor
@@ -52,46 +55,42 @@ import java.time.LocalDate
 class AguaViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = Repositorio(app)
+    private val prefs = Preferencias(app)
 
     /**
-     * O dia corrente e o do SERVIDOR, nao o do aparelho.
+     * Os copos de HOJE, no dia do aparelho.
      *
-     * `app/db/hydration.py` diz, e de proposito, que o dia do consumo e o dia
-     * local do servidor -- para bater com a janela dos lembretes. Um celular
-     * num fuso a frente perguntaria por uma data que o servidor ainda nao tem,
-     * e mostraria zero copo depois de beber tres. Aconteceu no emulador, que
-     * roda em GMT enquanto o servidor esta em GMT-3.
+     * Ate a 1.4 era o dia do servidor, e virar a meia-noite nao zerava o
+     * contador. Ver `AguaDao.observarDia` para o que mudou e por que.
      */
-    val dia = repo.aguaCorrente()
+    val dia = repo.aguaDeHoje()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val config = repo.configDeAgua()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun beber() = viewModelScope.launch { repo.beberAgua(diaAlvo(), 1) }
+    val historico = repo.historicoDeAgua()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun desfazer() = viewModelScope.launch { repo.beberAgua(diaAlvo(), -1) }
+    /** Quando o proximo lembrete esta marcado, em milissegundos; zero se nao ha. */
+    val proximoLembrete = prefs.aguaProximoEm
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    /**
-     * Qual linha incrementar no banco do aparelho.
-     *
-     * O `delta` que sobe e relativo, entao o servidor aplica no dia DELE de
-     * qualquer forma -- isto aqui so decide o que a tela mostra enquanto a
-     * resposta nao chega. Sem nenhum dia conhecido ainda, o do aparelho e o
-     * melhor chute, e a proxima sincronizacao corrige.
-     */
-    private fun diaAlvo(): String = dia.value?.day ?: LocalDate.now().toString()
+    fun beber() = viewModelScope.launch { repo.beberAgua(1) }
+
+    fun desfazer() = viewModelScope.launch { repo.beberAgua(-1) }
 }
 
 /**
- * A tela, em dois cartoes: o mostrador e o dia.
+ * A tela, em tres cartoes: o mostrador, o dia e o historico.
  *
  * **Lado a lado quando ha largura.** E o `.water-layout` do site, que e
  * `repeat(auto-fit, minmax(min(100%, 330px), 1fr))`. Empilhados num tablet, os
  * dois cartoes deixavam a metade de baixo da tela vazia e o mostrador espremido
  * numa faixa de 1000 dp de largura por um palmo de altura. A conta aqui e a
  * mesma do site: [LARGURA_MINIMA_DA_COLUNA] por coluna, e duas colunas so
- * quando as duas cabem.
+ * quando as duas cabem. O historico e largo por natureza -- sao semanas em
+ * colunas -- e ocupa a linha inteira nos dois arranjos.
  *
  * **O copo no lugar da barra de progresso.** A barra dizia a mesma coisa que o
  * copo diz, e duas reguas do mesmo numero no mesmo cartao so dividem a atencao.
@@ -102,6 +101,8 @@ class AguaViewModel(app: Application) : AndroidViewModel(app) {
 fun AguaScreen(vm: AguaViewModel = viewModel()) {
     val dia by vm.dia.collectAsState()
     val config by vm.config.collectAsState()
+    val historico by vm.historico.collectAsState()
+    val proximoLembrete by vm.proximoLembrete.collectAsState()
 
     val copos = dia?.glasses ?: 0
     // Os padroes batem com os do servidor (`app/db/hydration.py`): enquanto a
@@ -122,6 +123,7 @@ fun AguaScreen(vm: AguaViewModel = viewModel()) {
                 meta = meta,
                 ml = ml,
                 nivel = nivel,
+                proximoLembrete = proximoLembrete,
                 larguraDoCartao = larguraDoCartao,
                 aoBeber = vm::beber,
                 aoDesfazer = vm::desfazer,
@@ -130,7 +132,6 @@ fun AguaScreen(vm: AguaViewModel = viewModel()) {
         }
         val doDia: @Composable (Modifier) -> Unit = { modificador ->
             CartaoDoDia(
-                titulo = rotuloDoDia(dia?.day),
                 copos = copos,
                 meta = meta,
                 larguraDoCartao = larguraDoCartao,
@@ -159,6 +160,14 @@ fun AguaScreen(vm: AguaViewModel = viewModel()) {
                 item { mostrador(Modifier.fillMaxWidth()) }
                 item { doDia(Modifier.fillMaxWidth()) }
             }
+            item {
+                HistoricoDeAgua(
+                    dias = historico,
+                    meta = meta,
+                    ml = ml,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -170,6 +179,7 @@ private fun Mostrador(
     meta: Int,
     ml: Int,
     nivel: Float,
+    proximoLembrete: Long,
     larguraDoCartao: Dp,
     aoBeber: () -> Unit,
     aoDesfazer: () -> Unit,
@@ -216,10 +226,19 @@ private fun Mostrador(
             // A linha do recado existe cheia ou vazia, como o `min-height` do
             // `.water-note`: se ela so aparecesse ao bater a meta, os botoes
             // desceriam debaixo do dedo que acabou de toca-los.
+            //
+            // Sem a meta batida, ela diz QUANDO o proximo lembrete vem. E o
+            // `water-next` do site: quem acabou de beber quer saber que o app
+            // vai lembrar de novo -- e a que horas -- sem ter de esperar por ele.
+            val metaBatida = copos >= meta
             Text(
-                text = if (copos >= meta) "Meta do dia batida. 💗" else "",
-                style = TipografiaBeazeth.titleMedium,
-                color = Doce.destaqueEscuro,
+                text = when {
+                    metaBatida -> "Meta do dia batida. 💗"
+                    proximoLembrete > 0L -> horaDoLembrete(proximoLembrete)
+                    else -> ""
+                },
+                style = if (metaBatida) TipografiaBeazeth.titleMedium else TipografiaBeazeth.bodyMedium,
+                color = if (metaBatida) Doce.destaqueEscuro else Doce.tintaSuave,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = Espaco.e1),
             )
@@ -246,13 +265,12 @@ private fun Mostrador(
  */
 @Composable
 private fun CartaoDoDia(
-    titulo: String,
     copos: Int,
     meta: Int,
     larguraDoCartao: Dp,
     modifier: Modifier = Modifier,
 ) {
-    CartaoDaTela(modifier = modifier, titulo = titulo) {
+    CartaoDaTela(modifier = modifier, titulo = "Hoje") {
         val dentro = larguraDoCartao - Espaco.e5 * 2
         val quantos = meta.coerceAtLeast(1)
         val tamanho = ((dentro - Espaco.e1 * (quantos - 1)) / quantos)
@@ -307,19 +325,20 @@ private fun BotaoRedondo(rotulo: String, aoTocar: () -> Unit, ativo: Boolean) {
 }
 
 /**
- * O titulo do cartao de consumo.
- *
- * Diz a data quando ela nao e a de hoje no aparelho. Parece detalhe, mas e o
- * que impede a tela de mentir: offline por um dia, ou num fuso a frente do
- * servidor, "Hoje" estaria errado -- e um contador de agua errado e pior que
- * um contador que se explica.
+ * "Próximo lembrete às 11:37", ou "amanhã às 08:00" quando a janela de hoje ja
+ * fechou. A data por extenso so aparece se for mais longe que isso -- o que
+ * nao acontece com a janela do lembrete, mas acontece com o relogio do
+ * aparelho errado, e ai e melhor dizer a data que mentir a hora.
  */
-@Composable
-private fun rotuloDoDia(dia: String?): String {
-    if (dia == null) return "Hoje"
-    val data = runCatching { LocalDate.parse(dia) }.getOrNull() ?: return "Hoje"
-    if (data == LocalDate.now()) return "Hoje"
-    return "%02d/%02d".format(data.dayOfMonth, data.monthValue)
+private fun horaDoLembrete(instante: Long): String {
+    val quando = Instant.ofEpochMilli(instante).atZone(ZoneId.systemDefault()).toLocalDateTime()
+    val hora = "%02d:%02d".format(quando.hour, quando.minute)
+    val hoje = LocalDate.now()
+    return when (quando.toLocalDate()) {
+        hoje -> "Próximo lembrete às $hora"
+        hoje.plusDays(1) -> "Próximo lembrete amanhã às $hora"
+        else -> "Próximo lembrete em %02d/%02d às $hora".format(quando.dayOfMonth, quando.monthValue)
+    }
 }
 
 /** O `minmax(min(100%, 330px), 1fr)` do `.water-layout`. */

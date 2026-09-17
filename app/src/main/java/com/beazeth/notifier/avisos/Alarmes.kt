@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 
 /**
  * Quem acorda o aparelho na hora marcada.
@@ -85,6 +86,21 @@ fun alarmeExatoLiberado(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
     val gerente = context.getSystemService(AlarmManager::class.java) ?: return false
     return gerente.canScheduleExactAlarms()
+}
+
+/**
+ * O app esta fora da otimizacao de bateria?
+ *
+ * `setExactAndAllowWhileIdle` atravessa o Doze do Android puro, mas varios
+ * fabricantes (Samsung, Xiaomi, Huawei...) poem por cima um gerenciador
+ * proprio que, depois de alguns dias sem o app ser aberto, para de entregar
+ * os alarmes dele -- e o sintoma e exatamente "os lembretes so chegam quando
+ * eu mexo no app". Estar na lista de excecoes e o unico pedido que o app pode
+ * fazer a esse respeito, e e a tela de perfil que o faz.
+ */
+fun bateriaLiberada(context: Context): Boolean {
+    val energia = context.getSystemService(PowerManager::class.java) ?: return true
+    return energia.isIgnoringBatteryOptimizations(context.packageName)
 }
 
 /**

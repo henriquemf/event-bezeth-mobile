@@ -7,6 +7,7 @@ import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.ui.componentes.Destino
 import com.beazeth.notifier.ui.telas.creditarPomodoroTerminado
 import kotlinx.coroutines.flow.first
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -30,7 +31,9 @@ import java.time.ZoneId
  *
  * Se tudo e recalculado, o que impede o mesmo lembrete de ser entregue a cada
  * rodada e `Preferencias.avisoDeEventoAte`: um instante ate o qual a agenda ja
- * foi resolvida. Gatilho anterior a marca nao volta a ser considerado.
+ * foi resolvida. Gatilho anterior a marca nao volta a ser considerado. A agua
+ * tem a sua (`aguaMarcoEm`, o ultimo copo ou lembrete) e o pomodoro a dele
+ * (`pomodoroAvisado`).
  *
  * ## Atraso tem limite
  *
@@ -64,10 +67,9 @@ object Lembretes {
         val app = context.applicationContext
         garantirCanais(app, somEscolhido(app))
         when (tipo) {
-            Tipo.AGUA -> {
-                entregarAgua(app)
-                remarcarAgua(app)
-            }
+            // A agua tambem: quem decide se "venceu" e a propria conta do
+            // proximo copo, entao entregar e remarcar sao um passo so.
+            Tipo.AGUA -> remarcarAgua(app)
             Tipo.POMODORO -> {
                 entregarPomodoro(app)
                 remarcarPomodoro(app)
@@ -82,48 +84,85 @@ object Lembretes {
     // ---------------------------------------------------------------- agua
 
     /**
-     * Entrega o lembrete de agua.
+     * Alguem tocou no contador de agua -- um copo a mais ou a menos.
      *
-     * So e chamado quando o alarme TOCA, e nao em toda remarcacao -- ao
-     * contrario da agenda. Perder um lembrete de agua nao e perda: o proximo
-     * vem no intervalo seguinte. Entregar em toda remarcacao faria o app tocar
-     * o sininho de novo a cada abertura e a cada sincronizacao, que e o caminho
-     * mais curto para os avisos serem desligados.
+     * Move o marco para agora e remarca: o proximo lembrete passa a ser um
+     * intervalo depois DESTE copo, e nao do anterior. E o `last_sent_at` que o
+     * servidor empurra em `/api/hydration/drink`, feito aqui porque o alarme e
+     * daqui.
+     *
+     * O servidor so empurra ao ADICIONAR; aqui o "menos" tambem conta, de
+     * proposito. Quem acabou de corrigir o contador esta com a agua na cabeca
+     * -- e, com a meta desfeita, o lembrete que estava calado voltaria a valer e
+     * sairia no mesmo instante, em cima da tela em que a pessoa esta.
      */
-    private suspend fun entregarAgua(context: Context) {
-        if (!ligado(context, Canal.AGUA)) return
-        val banco = BancoLocal.obter(context)
-        val config = banco.agua().observarConfig().first()
-        if (config == null || !config.enabled) return
-        if (metaJaBatida(banco.agua().observarDiaMaisRecente().first(), config, LocalDate.now())) {
-            return
-        }
-
-        avisar(
-            context = context,
-            canal = Canal.AGUA,
-            som = somEscolhido(context),
-            id = idDoAviso("agua"),
-            titulo = TITULO_DA_AGUA,
-            texto = TEXTO_DA_AGUA,
-            rota = Destino.AGUA.rota,
-        )
+    suspend fun mexeuNaAgua(context: Context) {
+        val app = context.applicationContext
+        Preferencias(app).marcarAgua(System.currentTimeMillis())
+        remarcarAgua(app)
     }
 
+    /**
+     * Entrega o lembrete de agua se ele estiver vencido, e marca o proximo.
+     *
+     * Entrega e remarcacao na mesma passada, como na agenda: as duas saem da
+     * mesma conta ([proximoCopo]), e "venceu" e ela devolver um instante que
+     * nao esta no futuro. E o que faz este metodo servir igualmente ao alarme
+     * que tocou, ao app abrindo, a sincronizacao de hora em hora e ao aparelho
+     * religando: se o alarme das 10:00 nao tocou -- aparelho desligado, ou um
+     * fabricante que segura alarmes de app parado -- o lembrete sai na primeira
+     * dessas oportunidades, e sai UMA vez, porque a entrega move o marco.
+     *
+     * Com a meta do dia batida nao ha o que entregar ate a janela reabrir, e o
+     * alarme vai direto para la em vez de acordar o aparelho a cada intervalo
+     * para descobrir isso de novo.
+     */
     private suspend fun remarcarAgua(context: Context) {
-        val config = BancoLocal.obter(context).agua().observarConfig().first()
+        val prefs = Preferencias(context)
+
         // Desligado no app desmarca o alarme, e nao so cala a entrega: sem
         // isto o aparelho continuaria sendo acordado de hora em hora para
         // descobrir que nao ha nada a fazer.
-        val proximo = if (ligado(context, Canal.AGUA)) {
-            proximoCopo(config, LocalDateTime.now())
-        } else {
-            null
+        if (!ligado(context, Canal.AGUA)) {
+            desmarcarAlarme(context, Tipo.AGUA)
+            prefs.marcarProximoCopo(0L)
+            return
         }
+
+        val banco = BancoLocal.obter(context)
+        val config = banco.agua().observarConfig().first()
+        val agora = LocalDateTime.now()
+        val marco = prefs.aguaMarcoEm.first().takeIf { it > 0L }?.let(::emHoraLocal)
+        val batida = metaJaBatida(banco.agua().buscar(LocalDate.now().toString()), config)
+
+        var proximo = proximoCopo(config, marco, agora)
+
+        if (proximo != null && !proximo.isAfter(agora)) {
+            if (!batida) {
+                avisar(
+                    context = context,
+                    canal = Canal.AGUA,
+                    som = somEscolhido(context),
+                    id = idDoAviso("agua"),
+                    titulo = TITULO_DA_AGUA,
+                    texto = TEXTO_DA_AGUA,
+                    rota = Destino.AGUA.rota,
+                )
+            }
+            // O marco anda mesmo sem entrega: o vencimento ja foi julgado.
+            prefs.marcarAgua(emMilissegundos(agora))
+            proximo = proximoCopo(config, agora, agora)
+        }
+
+        if (batida && proximo != null) proximo = proximaAbertura(config, agora)
+
         if (proximo == null) {
             desmarcarAlarme(context, Tipo.AGUA)
+            prefs.marcarProximoCopo(0L)
         } else {
-            marcarAlarme(context, Tipo.AGUA, emMilissegundos(proximo))
+            val instante = emMilissegundos(proximo)
+            marcarAlarme(context, Tipo.AGUA, instante)
+            prefs.marcarProximoCopo(instante)
         }
     }
 
@@ -289,3 +328,7 @@ object Lembretes {
  */
 private fun emMilissegundos(quando: LocalDateTime): Long =
     quando.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+/** O caminho de volta: milissegundos do relogio em hora local do aparelho. */
+private fun emHoraLocal(instante: Long): LocalDateTime =
+    Instant.ofEpochMilli(instante).atZone(ZoneId.systemDefault()).toLocalDateTime()

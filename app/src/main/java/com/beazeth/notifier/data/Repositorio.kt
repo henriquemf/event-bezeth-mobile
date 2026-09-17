@@ -10,10 +10,17 @@ import com.beazeth.notifier.data.local.NotaEntity
 import com.beazeth.notifier.data.local.PendenciaEntity
 import com.beazeth.notifier.data.local.TarefaEntity
 import com.beazeth.notifier.sync.SyncWorker
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * O que as telas usam. Leitura sai do banco do aparelho; escrita entra nele
@@ -47,10 +54,38 @@ class Repositorio(private val context: Context) {
 
     fun tags() = banco.tags().observar()
 
-    /** O dia de agua que o SERVIDOR considera corrente. Ver o DAO. */
-    fun aguaCorrente(): Flow<AguaDiaEntity?> = banco.agua().observarDiaMaisRecente()
+    /**
+     * Os copos de hoje -- e "hoje" vira a meia-noite com a tela aberta.
+     *
+     * O `flatMapLatest` troca a consulta quando a data muda. Sem isto, quem
+     * deixasse o tablet na tela de agua atravessando a meia-noite continuaria
+     * vendo os copos de ontem ate sair da tela e voltar -- e "um dia novo
+     * comeca do zero" e justamente o que esta tela promete.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun aguaDeHoje(): Flow<AguaDiaEntity?> =
+        diaDeHoje().flatMapLatest { banco.agua().observarDia(it.toString()) }
+
+    /** Todos os dias com registro, para o historico da tela de agua. */
+    fun historicoDeAgua(): Flow<List<AguaDiaEntity>> = banco.agua().observarTodos()
 
     fun configDeAgua() = banco.agua().observarConfig()
+
+    /**
+     * A data de hoje, agora e de novo a cada meia-noite.
+     *
+     * O piso de um segundo na espera e para o relogio andando para tras (ajuste
+     * de hora, fuso): sem ele, uma meia-noite que "ja passou" faria o laco
+     * girar sem parar.
+     */
+    private fun diaDeHoje(): Flow<LocalDate> = flow {
+        while (true) {
+            val hoje = LocalDate.now()
+            emit(hoje)
+            val viraDia = hoje.plusDays(1).atStartOfDay()
+            delay(Duration.between(LocalDateTime.now(), viraDia).toMillis().coerceAtLeast(1_000L))
+        }
+    }
 
     /** Quantas escritas ainda nao subiram. A casca mostra isto. */
     fun pendencias(): Flow<Int> = banco.pendencias().quantas()
@@ -261,22 +296,39 @@ class Repositorio(private val context: Context) {
     // --------------------------------------------------------------- agua
 
     /**
-     * Um copo a mais ou a menos.
+     * Um copo a mais ou a menos, no dia de HOJE do aparelho.
      *
      * O servidor aceita `delta` e faz a conta la; aqui a mesma conta acontece
      * antes, para o copo acender na hora. Os dois chegam ao mesmo numero
      * porque a operacao e relativa -- se fosse "grave 5 copos", duas telas
      * abertas se sobrescreveriam.
+     *
+     * O `day` vai junto porque o dia e de quem bebe, nao do servidor: o do
+     * deploy roda em UTC, e o dia dele vira as 21:00 daqui. Sem o campo, um
+     * copo das 22:00 caia no dia seguinte -- e o aparelho, que sabe a data
+     * local, mostrava um amanha com copos dentro. O servidor confere o valor
+     * (`dia_do_consumo`, em `app/db/hydration.py`); o site, que nao manda,
+     * continua no dia dele.
+     *
+     * O marco do lembrete anda ANTES de a fila ser tocada: enfileirar dispara
+     * uma sincronizacao, que recalcula os alarmes, e se o lembrete estivesse
+     * vencido ele sairia neste instante -- em cima de quem acabou de beber.
      */
-    suspend fun beberAgua(dia: String, delta: Int) {
-        val atual = banco.agua().buscar(dia)?.glasses ?: 0
+    suspend fun beberAgua(delta: Int) {
+        val hoje = LocalDate.now().toString()
+        val atual = banco.agua().buscar(hoje)?.glasses ?: 0
         val novo = (atual + delta).coerceAtLeast(0)
-        banco.agua().gravar(AguaDiaEntity(day = dia, glasses = novo))
+        banco.agua().gravar(AguaDiaEntity(day = hoje, glasses = novo))
+
+        Lembretes.mexeuNaAgua(context)
 
         enfileirar(
             metodo = "POST",
             caminho = "/api/hydration/drink",
-            corpo = buildJsonObject { put("delta", delta) },
+            corpo = buildJsonObject {
+                put("delta", delta)
+                put("day", hoje)
+            },
             entidade = ALVO_AGUA,
         )
     }

@@ -39,7 +39,7 @@ tem: a de perfil.
 | **Weekly Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
 | **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim, avisa na barra de notificação, mesmo com o app fechado e a tela apagada. |
-| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, e a fileira do dia com um copinho por copo da meta. Avisa no intervalo e na janela escolhidos no site — e para de avisar quando a meta do dia é batida. |
+| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida no site — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
 | **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). Os avisos: quais existem, com que som (com botão de ouvir), e o que a tela bloqueada mostra. No fim, a sincronização e a saída da conta. |
 
@@ -229,13 +229,46 @@ aparecendo na tela. Ela continua sendo enviada porque vale nas versões
 anteriores, mas o efeito prático é binário: ou o aviso é legível, ou não há aviso
 legível nenhum. Daí a chave existir.
 
+**A água conta a partir do último copo, como o servidor.** O site guarda
+`last_sent_at` e beber empurra esse carimbo: quem acabou de beber só é cobrada
+um intervalo inteiro depois. O app faz a mesma conta sobre um marco do aparelho
+(`aguaMarcoEm`): o último copo ou o último lembrete, o que for mais recente. A
+primeira versão usava uma grade presa à abertura da janela (08:00, 09:00...), e
+estava errada de um jeito que só aparece usando — quem bebia às 09:55 recebia
+"hora de beber água" às 10:00, e parecia que o copo disparava o lembrete. O
+lembrete é para quem *não* bebeu.
+
+**O lembrete vencido sai na primeira oportunidade, uma vez.** "Vencido" é a conta
+devolver um instante que não está no futuro, e isso é julgado a cada recálculo —
+o alarme tocando, o app abrindo, a sincronização de hora em hora, o aparelho
+religando. Se o alarme das 10:00 não tocou (aparelho desligado, ou um fabricante
+que segura alarmes de app parado), o lembrete sai na próxima dessas
+oportunidades; e sai uma vez só, porque a entrega move o marco. A tela de água
+mostra para quando o próximo está marcado, para ninguém ter de esperar por ele
+para saber se existe.
+
 **A água cala quando a meta foi batida** — e aqui o app se afasta do site de
 propósito. O servidor avisa a cada intervalo até a janela fechar, tenha a pessoa
 bebido oito copos ou nenhum. Num navegador aberto isso passa; num celular no
 bolso, seis avisos depois da meta cumprida são exatamente o que faz alguém
-desligar os avisos. A comparação confere a *data* da linha antes de calar: um
-aparelho sem sincronizar desde ontem, com a meta de ontem cumprida, ficaria mudo
-o dia inteiro de hoje. Na dúvida, avisa.
+desligar os avisos. Com a meta batida o alarme vai direto para a próxima
+abertura da janela, em vez de acordar o aparelho a cada intervalo para descobrir
+de novo que não há o que lembrar.
+
+**O dia da água é o do aparelho, e é o app que diz ao servidor em que dia está.**
+O servidor do deploy roda em UTC, e o dia dele vira às 21:00 de quem está no
+Brasil: um copo das 22:00 caía no dia seguinte, e o contador não zerava à
+meia-noite porque a tela mostrava "o dia mais recente que o servidor mandou".
+Agora a tela olha a linha de *hoje* pela data local — que ainda não existe quando
+o dia começa, e por isso mostra zero —, e `POST /api/hydration/drink` leva `day`.
+O servidor aceita ontem, hoje ou amanhã em relação a ele e ignora o resto.
+
+**Fabricantes seguram alarmes.** Samsung, Xiaomi e outros põem por cima do Doze
+um gerenciador próprio que, depois de dias sem o app ser aberto, para de
+entregar os alarmes dele — e o sintoma é "os lembretes só chegam quando eu mexo
+no app". O cartão **Avisos** do perfil percebe isso e oferece "Liberar em segundo
+plano", que abre a pergunta do sistema para tirar o app da otimização de
+bateria. É a única coisa que o app pode pedir a esse respeito.
 
 ---
 
@@ -378,7 +411,7 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Som.kt               os toques, e por que trocar de som troca o canal de lugar
 │   ├── Alarmes.kt           o AlarmManager: um alarme por assunto, sempre o próximo
 │   ├── Lembretes.kt         quem decide o que avisar e quando tocar de novo
-│   ├── Agua.kt              a grade de horários da janela de hidratação
+│   ├── Agua.kt              o próximo copo: um intervalo depois do último, dentro da janela
 │   ├── Eventos.kt           os gatilhos da agenda, com as regras do site
 │   └── Receptores.kt        o alarme tocou / o aparelho religou
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando
@@ -390,7 +423,7 @@ app/src/main/java/com/beazeth/notifier/
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 65 arquivos Kotlin, ~15,1 mil linhas. **Nenhum passa de 700 linhas** — quando
+São 66 arquivos Kotlin, ~15,7 mil linhas. **Nenhum passa de 700 linhas** — quando
 um chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
 `calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
 vez de um).

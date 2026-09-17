@@ -31,6 +31,7 @@ import com.beazeth.notifier.avisos.Canal
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.Som
 import com.beazeth.notifier.avisos.alarmeExatoLiberado
+import com.beazeth.notifier.avisos.bateriaLiberada
 import com.beazeth.notifier.avisos.podeAvisar
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
@@ -75,12 +76,14 @@ internal fun CartaoDeAvisos() {
 
     var ligados by remember { mutableStateOf(podeAvisar(contexto)) }
     var naHoraCerta by remember { mutableStateOf(alarmeExatoLiberado(contexto)) }
+    var semFreioDeBateria by remember { mutableStateOf(bateriaLiberada(contexto)) }
 
     DisposableEffect(dono) {
         val observador = LifecycleEventObserver { _, evento ->
             if (evento == Lifecycle.Event.ON_RESUME) {
                 ligados = podeAvisar(contexto)
                 naHoraCerta = alarmeExatoLiberado(contexto)
+                semFreioDeBateria = bateriaLiberada(contexto)
             }
         }
         dono.lifecycle.addObserver(observador)
@@ -100,6 +103,10 @@ internal fun CartaoDeAvisos() {
                 !naHoraCerta ->
                     "Os avisos chegam, mas podem atrasar: o sistema não está " +
                         "deixando o app marcar alarmes na hora exata."
+                !semFreioDeBateria ->
+                    "Os avisos chegam, mas alguns aparelhos seguram os alarmes de " +
+                        "um app que passou dias sem ser aberto, para poupar bateria. " +
+                        "Liberar o app disso garante o lembrete de água mesmo assim."
                 else ->
                     "Chegam mesmo com o app fechado e a tela apagada. Tocar num " +
                         "aviso abre a tela do assunto."
@@ -117,6 +124,11 @@ internal fun CartaoDeAvisos() {
             BotaoPrimario(
                 texto = "Permitir hora exata",
                 aoTocar = { contexto.startActivity(ajustesDeAlarme(contexto.packageName)) },
+            )
+        } else if (!semFreioDeBateria) {
+            BotaoPrimario(
+                texto = "Liberar em segundo plano",
+                aoTocar = { contexto.startActivity(ajustesDeBateria(contexto.packageName)) },
             )
         }
 
@@ -252,5 +264,16 @@ private fun ajustesDeAviso(pacote: String): Intent =
 private fun ajustesDeAlarme(pacote: String): Intent =
     Intent(
         Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        android.net.Uri.parse("package:$pacote"),
+    )
+
+/**
+ * A caixa do sistema que pergunta "deixar este app ignorar a otimizacao de
+ * bateria?". Uma pergunta so, com Sim e Nao -- e nao a lista de todos os apps,
+ * onde a pessoa teria de achar este. Ver `bateriaLiberada`.
+ */
+private fun ajustesDeBateria(pacote: String): Intent =
+    Intent(
+        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
         android.net.Uri.parse("package:$pacote"),
     )

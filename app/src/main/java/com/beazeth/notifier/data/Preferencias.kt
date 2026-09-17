@@ -41,6 +41,8 @@ class Preferencias(private val context: Context) {
     private val chaveAvisoDeEvento = longPreferencesKey("aviso_de_evento_ate")
     private val chaveSomDoAviso = stringPreferencesKey("som_do_aviso")
     private val chaveNomeNaTelaBloqueada = booleanPreferencesKey("nome_na_tela_bloqueada")
+    private val chaveAguaMarco = longPreferencesKey("agua_marco_em")
+    private val chaveAguaProximo = longPreferencesKey("agua_proximo_em")
 
     val tema: Flow<String> = context.prefsAparencia.data.map { it[chaveTema] ?: PALETA_PADRAO }
     val fonte: Flow<String> = context.prefsAparencia.data.map { it[chaveFonte] ?: FONTE_PADRAO }
@@ -184,6 +186,37 @@ class Preferencias(private val context: Context) {
 
     suspend fun marcarAvisoDeEventoAte(instante: Long) {
         context.prefsAparencia.edit { it[chaveAvisoDeEvento] = instante }
+    }
+
+    /**
+     * O ultimo marco da agua, em milissegundos do relogio: o copo mais recente
+     * ou o lembrete mais recente, o que tiver acontecido por ultimo.
+     *
+     * E o `last_sent_at` do servidor, so que do aparelho. O proximo lembrete e
+     * um intervalo depois disto -- ver `avisos/Agua.kt`. Zero e "nunca", e
+     * nunca quer dizer VENCIDO: o primeiro lembrete sai assim que a janela
+     * estiver aberta, como no servidor com `last_sent_at` nulo.
+     */
+    val aguaMarcoEm: Flow<Long> =
+        context.prefsAparencia.data.map { it[chaveAguaMarco] ?: 0L }
+
+    suspend fun marcarAgua(instante: Long) {
+        context.prefsAparencia.edit { it[chaveAguaMarco] = instante }
+    }
+
+    /**
+     * Para quando o proximo lembrete de agua esta marcado, ou zero se nao ha.
+     *
+     * Escrito por quem marca o alarme, lido pela tela de agua, que mostra
+     * "proximo lembrete as 11:37". E a resposta a pergunta que ficava no ar:
+     * "e quando e que ele vai me lembrar?" -- sem isto, o unico jeito de saber
+     * se o lembrete existia era esperar por ele.
+     */
+    val aguaProximoEm: Flow<Long> =
+        context.prefsAparencia.data.map { it[chaveAguaProximo] ?: 0L }
+
+    suspend fun marcarProximoCopo(instante: Long) {
+        context.prefsAparencia.edit { it[chaveAguaProximo] = instante }
     }
 
     suspend fun salvarPomodoro(minutos: Int, fimEm: Long, restante: Int) {

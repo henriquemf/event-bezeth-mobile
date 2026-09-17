@@ -44,6 +44,17 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+    <!-- Pedir para ficar fora da otimizacao de bateria. Nao concede nada
+         sozinha: e o que permite ABRIR a caixa do sistema que pergunta a
+         pessoa, a partir do cartao "Avisos" do perfil. Sem ela a intencao
+         `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` e recusada.
+
+         Existe pelo mesmo motivo do alarme exato: um lembrete de agua que o
+         fabricante segura ate o app ser aberto nao lembrou nada. E, como o
+         alarme exato, a Play Store pede justificativa para esta — ver
+         `bateriaLiberada` em `Alarmes.kt`. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Sem backup: o que o app guarda no aparelho e (a) um cache do que ja
          esta no servidor e (b) o token de acesso, que vale noventa dias e nao
          e revogavel um a um.

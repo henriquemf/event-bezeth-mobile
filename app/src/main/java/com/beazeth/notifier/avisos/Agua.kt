@@ -2,8 +2,6 @@ package com.beazeth.notifier.avisos
 
 import com.beazeth.notifier.data.local.AguaDiaEntity
 import com.beazeth.notifier.data.local.ConfigAguaEntity
-import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
@@ -13,62 +11,67 @@ import java.time.LocalDateTime
  * a sincronizacao ja traz para o Room. Nada aqui e escolhido de novo: mudar o
  * intervalo no computador muda o do celular na proxima sincronizacao.
  *
- * ## Uma grade, e nao "a cada X desde o ultimo"
+ * ## Um intervalo depois do ultimo copo, como no servidor
  *
- * O servidor conta a partir de `last_sent_at`: mandou agora, o proximo e daqui
- * a X. Funciona la, onde um processo fica girando. Aqui seria pior: cada
- * reinicio do aparelho, cada atraso do Doze e cada troca de fuso empurrariam
- * todos os avisos seguintes, e a janela de 08:00-22:00 acabaria virando
- * 08:07-22:07 depois de uma semana.
+ * O servidor conta a partir de `last_sent_at`, e beber um copo empurra esse
+ * carimbo (`/api/hydration/drink`): quem acabou de beber so e cobrada de novo
+ * um intervalo inteiro depois. Aqui e a mesma conta sobre um marco guardado no
+ * aparelho (`Preferencias.aguaMarcoEm`): o ultimo copo bebido OU o ultimo
+ * lembrete entregue, o que for mais recente.
  *
- * Entao os horarios sao uma GRADE presa a abertura da janela: 08:00, 09:00,
- * 10:00... Nao ha deriva, e "o proximo" e a mesma conta antes e depois de
- * desligar o aparelho.
+ * A primeira versao usava uma grade presa a abertura da janela (08:00, 09:00,
+ * 10:00...), para os horarios nao derivarem. Estava errada de um jeito que so
+ * aparece usando: quem bebia as 09:55 recebia "hora de beber agua" as 10:00,
+ * cinco minutos depois -- e parecia que o lembrete era disparado pelo copo. O
+ * lembrete e para quem NAO bebeu; contar a partir do ultimo copo e o que faz
+ * ele calar para quem bebeu.
+ *
+ * ## Vencido e "agora"
+ *
+ * [proximoCopo] pode devolver um instante que nao esta no futuro. E o caso do
+ * marco de ontem, ou de nenhum marco: o lembrete esta vencido, e quem chama
+ * entrega na hora e recomeca a contar de agora -- exatamente o que o agendador
+ * do servidor faz quando `last_sent_at` e antigo ou nulo.
  */
 
 /** Titulo e texto sao os do servidor, letra por letra: um app so, duas telas. */
 const val TITULO_DA_AGUA = "MOMO BEBA ÁGUA 💗"
 const val TEXTO_DA_AGUA = "Meu amorzinho, hora de BEBER ÁGUA <3"
 
-private const val MINUTOS_DO_DIA = 1440
-
 /**
- * O proximo horario da grade depois de [agora], ou `null` se nao ha o que
- * marcar.
+ * O proximo lembrete: um intervalo depois de [ultimoMarco], ou [agora] se isso
+ * ja passou, sempre dentro da janela. `null` se nao ha o que marcar.
  *
  * `null` acontece com o lembrete desligado, sem configuracao nenhuma (quem usa
  * sem conta nunca recebeu uma) ou com hora malformada no banco. Nos tres casos
  * o certo e ficar quieto -- e e o mesmo criterio da barra lateral, que so
  * mostra o copo quando `enabled` e verdadeiro.
+ *
+ * Fora da janela, o devido e empurrado para a proxima abertura: um copo as
+ * 21:30 com intervalo de uma hora e janela ate as 22:00 nao lembra as 22:30,
+ * lembra as 08:00 de amanha.
  */
-internal fun proximoCopo(config: ConfigAguaEntity?, agora: LocalDateTime): LocalDateTime? {
-    if (config == null || !config.enabled) return null
-
-    val inicio = emMinutos(config.startTime) ?: return null
-    val fim = emMinutos(config.endTime) ?: return null
+internal fun proximoCopo(
+    config: ConfigAguaEntity?,
+    ultimoMarco: LocalDateTime?,
+    agora: LocalDateTime,
+): LocalDateTime? {
+    if (config == null) return null
+    val janela = Janela.de(config) ?: return null
     val intervalo = config.intervalMinutes.coerceAtLeast(1).toLong()
-    val duracao = duracaoDaJanela(inicio, fim)
-
-    // Ontem, hoje e amanha, nesta ordem. Ontem entra porque uma janela que
-    // cruza a meia-noite (22:30 -> 06:00) ABRE no dia anterior: as 02:00 de
-    // hoje, quem esta correndo e a janela de ontem, e a abertura de hoje ainda
-    // esta vinte horas a frente. Amanha entra porque a de hoje pode ter
-    // fechado.
-    for (deslocamento in -1L..1L) {
-        val abertura = LocalDate.from(agora)
-            .plusDays(deslocamento)
-            .atStartOfDay()
-            .plusMinutes(inicio.toLong())
-
-        val decorridos = Duration.between(abertura, agora).toMinutes()
-        // Estritamente DEPOIS de agora: cair exatamente em cima de um horario
-        // da grade tem de devolver o seguinte, senao o despertador remarcaria
-        // para o instante que acabou de tocar e entraria em laco.
-        val passo = if (decorridos < 0) 0L else (decorridos / intervalo + 1) * intervalo
-        if (passo < duracao) return abertura.plusMinutes(passo)
-    }
-    return null
+    val devido = ultimoMarco?.plusMinutes(intervalo)?.takeIf { it.isAfter(agora) } ?: agora
+    return if (janela.contem(devido)) devido else janela.proximaAbertura(devido)
 }
+
+/**
+ * A proxima vez que a janela ABRE, estritamente depois de [apos].
+ *
+ * E para onde vai o alarme quando a meta do dia ja foi batida: nao ha mais o
+ * que lembrar hoje, e acordar o aparelho a cada intervalo para descobrir isso
+ * de novo seria gastar bateria a toa.
+ */
+internal fun proximaAbertura(config: ConfigAguaEntity?, apos: LocalDateTime): LocalDateTime? =
+    Janela.de(config)?.proximaAbertura(apos)
 
 /**
  * A meta do dia ja foi batida?
@@ -79,15 +82,46 @@ internal fun proximoCopo(config: ConfigAguaEntity?, agora: LocalDateTime): Local
  * meta cumprida sao exatamente o que faz alguem desligar os avisos do app -- e
  * ai o lembrete de amanha tambem morre.
  *
- * A comparacao de datas nao e zelo excessivo: [AguaDiaEntity] e a linha do dia
- * corrente DO SERVIDOR, que pode estar velha se a sincronizacao nao roda ha um
- * tempo. Sem conferir a data, um aparelho offline desde ontem -- com a meta de
- * ontem cumprida -- ficaria calado o dia inteiro de hoje. Na duvida, avisa.
+ * [dia] e a linha de HOJE no aparelho (`AguaDao.buscar` pela data local), ou
+ * `null` se ninguem bebeu nada hoje ainda.
  */
-internal fun metaJaBatida(dia: AguaDiaEntity?, config: ConfigAguaEntity?, hoje: LocalDate): Boolean {
+internal fun metaJaBatida(dia: AguaDiaEntity?, config: ConfigAguaEntity?): Boolean {
     val meta = config?.dailyGoal ?: return false
     if (meta <= 0 || dia == null) return false
-    return dia.day == hoje.toString() && dia.glasses >= meta
+    return dia.glasses >= meta
+}
+
+/**
+ * A janela do lembrete, em minutos do dia, com a regra do servidor para a que
+ * cruza a meia-noite (22:30 -> 06:00).
+ */
+private class Janela(private val inicio: Int, private val fim: Int) {
+
+    /**
+     * O mesmo `_in_hydration_window` do servidor, inclusive no caso de inicio
+     * igual a fim: la a condicao `agora >= inicio or agora < fim` e verdadeira
+     * o tempo todo, ou seja, o dia inteiro. Divergir aqui faria o mesmo ajuste
+     * avisar no computador e nao no celular.
+     */
+    fun contem(instante: LocalDateTime): Boolean {
+        val m = instante.hour * 60 + instante.minute
+        return if (inicio < fim) m >= inicio && m < fim else m >= inicio || m < fim
+    }
+
+    /** A abertura de hoje se ainda nao passou; senao, a de amanha. */
+    fun proximaAbertura(apos: LocalDateTime): LocalDateTime {
+        val hoje = apos.toLocalDate().atStartOfDay().plusMinutes(inicio.toLong())
+        return if (hoje.isAfter(apos)) hoje else hoje.plusDays(1)
+    }
+
+    companion object {
+        fun de(config: ConfigAguaEntity?): Janela? {
+            if (config == null || !config.enabled) return null
+            val inicio = emMinutos(config.startTime) ?: return null
+            val fim = emMinutos(config.endTime) ?: return null
+            return Janela(inicio, fim)
+        }
+    }
 }
 
 /** `"08:00"` em minutos desde a meia-noite, ou `null` se o texto nao servir. */
@@ -99,15 +133,3 @@ private fun emMinutos(hora: String?): Int? {
     if (h !in 0..23 || m !in 0..59) return null
     return h * 60 + m
 }
-
-/**
- * Quantos minutos a janela dura.
- *
- * Inicio igual ao fim cai no segundo ramo e da 1440 -- o dia inteiro. Nao e
- * acaso: e o que `_in_hydration_window` faz no servidor, onde a condicao
- * `agora >= inicio or agora < fim` e verdadeira o tempo todo quando os dois sao
- * iguais. Divergir aqui faria o mesmo ajuste avisar no computador e nao no
- * celular.
- */
-private fun duracaoDaJanela(inicio: Int, fim: Int): Long =
-    if (inicio < fim) (fim - inicio).toLong() else (MINUTOS_DO_DIA - inicio + fim).toLong()

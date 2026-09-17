@@ -50,7 +50,6 @@ import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.TipografiaBeazeth
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 /** A largura da lateral. O `--sidebar-w` do site e 260 px; aqui e o mesmo
  *  numero em dp, que num tablet de 11 polegadas da a mesma proporcao. */
@@ -104,7 +103,7 @@ fun BarraLateral(
 
     val fluxoDoPomodoro = remember { estadoDoPomodoro(prefs) }
     val pomodoro by fluxoDoPomodoro.collectAsState(EstadoPomodoro())
-    val diaDeAgua by remember { repo.aguaCorrente() }.collectAsState(null)
+    val diaDeAgua by remember { repo.aguaDeHoje() }.collectAsState(null)
     val configDeAgua by remember { repo.configDeAgua() }.collectAsState(null)
 
     Column(
@@ -236,10 +235,6 @@ fun BarraLateral(
         if (configDeAgua?.enabled == true) {
             val copos = diaDeAgua?.glasses ?: 0
             val meta = configDeAgua?.dailyGoal ?: 8
-            // Qual linha incrementar: a do dia que o SERVIDOR considera
-            // corrente, e nao a do aparelho -- mesmo motivo escrito no
-            // `AguaViewModel`.
-            val dia = diaDeAgua?.day ?: LocalDate.now().toString()
 
             Caixa {
                 Row(
@@ -280,12 +275,12 @@ fun BarraLateral(
                     BotaoDaLateral(
                         texto = "Bebi",
                         destacado = true,
-                        aoTocar = { escopo.launch { repo.beberAgua(dia, 1) } },
+                        aoTocar = { escopo.launch { repo.beberAgua(1) } },
                         modifier = Modifier.weight(1f),
                     )
                     BotaoDaLateral(
                         texto = "−",
-                        aoTocar = { escopo.launch { repo.beberAgua(dia, -1) } },
+                        aoTocar = { escopo.launch { repo.beberAgua(-1) } },
                         modifier = Modifier.width(46.dp),
                     )
                 }

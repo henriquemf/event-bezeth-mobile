@@ -172,17 +172,22 @@ interface TagDao {
 @Dao
 interface AguaDao {
     /**
-     * O dia mais recente que o servidor mandou.
+     * Os copos de UM dia -- o de hoje no aparelho, na tela e na lateral.
      *
-     * A tela de agua usa ESTE, e nao a data do aparelho. O dia do consumo e o
-     * dia LOCAL DO SERVIDOR -- esta escrito assim em `app/db/hydration.py`, e
-     * de proposito, para bater com a janela dos lembretes. Um celular num fuso
-     * a frente perguntaria por uma data que o servidor ainda nao tem e veria
-     * zero copo depois de beber tres. Foi exatamente o que aconteceu no
-     * emulador, que roda em GMT enquanto o servidor esta em GMT-3.
+     * Ate a 1.4 a tela mostrava a linha mais recente que o servidor tinha
+     * mandado, fosse de que dia fosse, porque o dia do consumo era o do
+     * SERVIDOR. Tinha um efeito que ninguem pediu: virava o dia e o contador
+     * continuava mostrando os copos de ontem, com a data miuda no titulo do
+     * cartao. Agora o dia e o do aparelho, e e o app que diz ao servidor em que
+     * dia esta (ver `Repositorio.beberAgua`). Um dia novo comeca do zero pelo
+     * motivo mais simples possivel: a linha dele ainda nao existe.
      */
-    @Query("SELECT * FROM agua_dias ORDER BY day DESC LIMIT 1")
-    fun observarDiaMaisRecente(): Flow<AguaDiaEntity?>
+    @Query("SELECT * FROM agua_dias WHERE day = :dia")
+    fun observarDia(dia: String): Flow<AguaDiaEntity?>
+
+    /** Todos os dias com registro, do mais antigo ao mais novo. E o historico. */
+    @Query("SELECT * FROM agua_dias ORDER BY day ASC")
+    fun observarTodos(): Flow<List<AguaDiaEntity>>
 
     @Upsert
     suspend fun gravar(dias: List<AguaDiaEntity>)
