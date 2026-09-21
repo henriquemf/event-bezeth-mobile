@@ -53,9 +53,10 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
  * duas listas, um destino novo entra numa e falta na outra -- e o que falta e
  * sempre o do celular, que e o menos testado. Aqui vale o mesmo.
  *
- * `curto` existe porque a barra inferior tem uns 60 dp por item: "Weekly
- * Planner" nao cabe, "Planner" cabe. `naBarra` marca quem merece o polegar --
- * Aparencia e tela de ajuste, se usa uma vez por mes e fica no topo.
+ * `curto` existe porque a barra inferior tem uns 60 dp por item, e com oito
+ * destinos sobra menos ainda: "Beber agua" nao cabe, "Agua" cabe. `naBarra`
+ * marca quem merece o polegar -- Aparencia e tela de ajuste, se usa uma vez por
+ * mes e fica no topo.
  */
 enum class Destino(
     val rota: String,
@@ -66,7 +67,7 @@ enum class Destino(
 ) {
     POSTITS("postits", "🗒️", "Post-its", "Post-its", true),
     CALENDARIO("calendario", "📅", "Calendário", "Agenda", true),
-    PLANNER("planner", "🗓️", "Weekly Planner", "Planner", true),
+    PLANNER("planner", "🗓️", "Planner", "Planner", true),
     TODO("todo", "✅", "To-do", "To-do", true),
     // "Foco" e nao "Pomodoro" na barra inferior: com sete destinos cada um tem
     // ~51 dp de largura, e "Pomodoro" saia cortado ("Pomodo..."). E o nome da
