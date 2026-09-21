@@ -5,8 +5,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -63,7 +65,14 @@ internal fun GradeDoAno(
     val vazia = misturar(cores.tinta, cores.superficie, 0.10f)
     val estiloMiudo = TextStyle(color = cores.tintaSuave, fontSize = 9.sp)
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth(),
+        // Centralizada: com o teto da celula, num tablet a grade ocupa menos de
+        // metade do cartao, e encostada a esquerda ela fica um retangulo
+        // perdido num campo vazio. O teto existe porque 31 linhas de celula
+        // grande passariam da altura da tela.
+        contentAlignment = Alignment.TopCenter,
+    ) {
         // A celula cresce ate caber doze colunas na largura disponivel, com um
         // teto para nao virar azulejo no tablet e um piso para o dedo acertar.
         val livre = maxWidth - CALHA
@@ -72,7 +81,7 @@ internal fun GradeDoAno(
 
         Canvas(
             modifier = Modifier
-                .fillMaxWidth()
+                .width(CALHA + passo * COLUNAS - VAO)
                 .height(CABECALHO + passo * LINHAS - VAO)
                 .pointerInput(ano, passo) {
                     detectTapGestures { toque ->
