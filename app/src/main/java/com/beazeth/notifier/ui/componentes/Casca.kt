@@ -68,8 +68,12 @@ enum class Destino(
     CALENDARIO("calendario", "📅", "Calendário", "Agenda", true),
     PLANNER("planner", "🗓️", "Weekly Planner", "Planner", true),
     TODO("todo", "✅", "To-do", "To-do", true),
-    POMODORO("pomodoro", "🍎", "Pomodoro", "Pomodoro", true),
+    // "Foco" e nao "Pomodoro" na barra inferior: com sete destinos cada um tem
+    // ~51 dp de largura, e "Pomodoro" saia cortado ("Pomodo..."). E o nome da
+    // fase que o cronometro conta -- a outra e o descanso.
+    POMODORO("pomodoro", "🍎", "Pomodoro", "Foco", true),
     AGUA("agua", "💧", "Beber água", "Água", true),
+    DIARIO("diario", "📔", "Diário", "Diário", true),
     APARENCIA("aparencia", "🎨", "Aparência", "Tema", false),
 
     /**

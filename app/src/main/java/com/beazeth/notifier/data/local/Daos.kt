@@ -285,3 +285,35 @@ interface PomodoroDao {
     @Query("SELECT MIN(terminadoEm) FROM pomodoros")
     fun primeiroEm(): Flow<Long?>
 }
+
+/**
+ * O diario.
+ *
+ * Tudo por faixa de dias em vez de "tudo": a grade mostra um ano por vez, e
+ * carregar dez anos para desenhar um seria trabalho jogado fora a cada abertura.
+ */
+@Dao
+interface DiarioDao {
+    @Query("SELECT * FROM diario WHERE day BETWEEN :inicio AND :fim ORDER BY day")
+    fun observarIntervalo(inicio: String, fim: String): Flow<List<DiarioEntity>>
+
+    @Query("SELECT * FROM diario WHERE day = :dia")
+    suspend fun buscar(dia: String): DiarioEntity?
+
+    @Upsert
+    suspend fun gravar(dias: List<DiarioEntity>)
+
+    @Upsert
+    suspend fun gravar(dia: DiarioEntity)
+
+    @Query("DELETE FROM diario WHERE day = :dia")
+    suspend fun apagar(dia: String)
+
+    /** Para a adocao ao entrar numa conta: o que foi escrito sem conta. */
+    @Query("SELECT * FROM diario ORDER BY day")
+    suspend fun todos(): List<DiarioEntity>
+
+    /** Quantos dias tem registro, para a tela de perfil. */
+    @Query("SELECT COUNT(*) FROM diario")
+    fun quantos(): Flow<Int>
+}

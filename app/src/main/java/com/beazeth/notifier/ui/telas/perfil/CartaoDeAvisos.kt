@@ -153,6 +153,18 @@ internal fun CartaoDeAvisos() {
             )
         }
 
+        // --------------------------------------------- a festa do pomodoro
+        Subtitulo("Fim do foco")
+
+        val festa by prefs.festaDoPomodoro.collectAsStateWithLifecycle(true)
+
+        ChaveDeAviso(
+            titulo = "Confete e palmas",
+            descricao = "Quando o foco acaba e o descanso começa, com o app aberto.",
+            marcado = festa,
+            aoMudar = { novo -> escopo.launch { prefs.definirFestaDoPomodoro(novo) } },
+        )
+
         // ------------------------------------------- a tela bloqueada
         Subtitulo("Na tela bloqueada")
 

@@ -31,17 +31,21 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.beazeth.notifier.avisos.Lembretes
+import com.beazeth.notifier.avisos.Tipo
+import com.beazeth.notifier.avisos.tocarPalmas
 import com.beazeth.notifier.ui.componentes.BarraInferior
+import com.beazeth.notifier.ui.componentes.Confete
 import com.beazeth.notifier.ui.componentes.BarraLateral
 import com.beazeth.notifier.ui.componentes.BarraSuperior
 import com.beazeth.notifier.ui.componentes.Destino
 import com.beazeth.notifier.ui.telas.AguaScreen
+import com.beazeth.notifier.ui.telas.diario.DiarioScreen
 import com.beazeth.notifier.data.Preferencias
-import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.ui.telas.AparenciaScreen
 import com.beazeth.notifier.ui.telas.PomodoroScreen
-import com.beazeth.notifier.ui.telas.creditarPomodoroTerminado
 import com.beazeth.notifier.ui.telas.estadoDoPomodoro
 import com.beazeth.notifier.ui.telas.perfil.PerfilScreen
 import com.beazeth.notifier.ui.telas.TodoScreen
@@ -128,21 +132,45 @@ fun CascaApp(
         aoAtenderOPedido()
     }
 
+    // O instante do pomodoro que esta sendo festejado agora, ou zero.
+    var festa by remember { mutableStateOf(0L) }
+
     // Um pomodoro que terminou com o app fechado -- ou com a pessoa em outra
-    // tela -- entra na conta do perfil aqui. E a casca porque ela esta em TODAS
-    // as telas, inclusive nos aparelhos sem lateral; a tela do pomodoro sozinha
-    // so creditaria quem estivesse olhando para ela na hora.
+    // tela -- e resolvido aqui: o credito no perfil, o comeco do descanso e a
+    // festa. E a casca porque ela esta em TODAS as telas, inclusive nos
+    // aparelhos sem lateral; a tela do pomodoro sozinha so atenderia quem
+    // estivesse olhando para ela na hora.
     LaunchedEffect(Unit) {
-        val prefs = Preferencias(contexto.applicationContext)
-        val banco = BancoLocal.obter(contexto.applicationContext)
+        val app = contexto.applicationContext
+        val prefs = Preferencias(app)
         estadoDoPomodoro(prefs)
             // O fluxo bate a cada segundo, e "terminado" continua verdade ate
             // alguem tocar em Começar. Sem reduzir a UM valor por pomodoro, o
-            // credito seria pedido sessenta vezes por minuto para nao fazer
+            // trabalho seria pedido sessenta vezes por minuto para nao fazer
             // nada -- a checagem e barata, mas nao de graca.
-            .map { if (it.fimEm > 0L && it.restante == 0) it.fimEm else 0L }
+            //
+            // `!emDescanso` porque o fim do DESCANSO nao e festa: quem terminou
+            // o intervalo nao cumpriu nada, so voltou.
+            .map { if (it.fimEm > 0L && it.restante == 0 && !it.emDescanso) it.fimEm else 0L }
             .distinctUntilChanged()
-            .collect { if (it > 0L) creditarPomodoroTerminado(prefs, banco) }
+            .collect { fim ->
+                if (fim <= 0L) return@collect
+
+                // Credita, comeca o descanso e remarca o alarme -- tudo o que o
+                // despertador faria se tivesse tocado. Chamar o mesmo caminho
+                // em vez de repetir os passos e o que impede os dois de
+                // discordarem.
+                Lembretes.tocou(app, Tipo.POMODORO)
+
+                // Uma festa por pomodoro: sem o carimbo, reabrir o app com um
+                // pomodoro vencido soltaria confete de novo, toda vez.
+                if (prefs.pomodoroFestejado.first() == fim) return@collect
+                prefs.marcarPomodoroFestejado(fim)
+                if (!prefs.festaDoPomodoro.first()) return@collect
+
+                festa = fim
+                tocarPalmas(app)
+            }
     }
 
     val conexao = remember {
@@ -225,6 +253,7 @@ fun CascaApp(
                 composable(Destino.TODO.rota) { TodoScreen() }
                 composable(Destino.POMODORO.rota) { PomodoroScreen() }
                 composable(Destino.AGUA.rota) { AguaScreen() }
+                composable(Destino.DIARIO.rota) { DiarioScreen() }
                 composable(Destino.APARENCIA.rota) { AparenciaScreen() }
                 composable(Destino.PERFIL.rota) {
                     PerfilScreen(
@@ -244,6 +273,13 @@ fun CascaApp(
         if (!lateralCabe) {
             BarraInferior(atual = atual, aoTrocar = { nav.irPara(it) })
         }
+    }
+
+    // Por cima de tudo, inclusive das barras: confete que passa por tras do
+    // menu nao e confete. Nao intercepta toque nenhum -- e um `Canvas` sem
+    // gesto, entao o dedo atravessa.
+    if (festa > 0L) {
+        Confete(chave = festa, aoTerminar = { festa = 0L })
     }
     }
     }

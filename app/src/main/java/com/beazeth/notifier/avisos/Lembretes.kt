@@ -260,19 +260,57 @@ object Lembretes {
      */
     private suspend fun entregarPomodoro(context: Context) {
         val prefs = Preferencias(context)
+        val agora = System.currentTimeMillis()
+
+        // O DESCANSO acabou. Vem antes do foco de proposito: enquanto ele corre,
+        // o `pomoFimEm` do foco ja esta vencido e gravado, e sem esta saida o
+        // fim do foco seria julgado de novo a cada rodada.
+        //
+        // Zerar e o proprio carimbo de "ja anunciado" -- por isso nao ha um
+        // segundo carimbo para o descanso. Sem zerar, comecar outro pomodoro
+        // depois nunca teria o fim entregue, porque este ramo venceria sempre.
+        val descansoAte = prefs.pomoDescansoAte.first()
+        if (descansoAte > 0L) {
+            if (agora < descansoAte) return
+            prefs.marcarDescansoAte(0L)
+            if (!ligado(context, Canal.POMODORO)) return
+            avisar(
+                context = context,
+                canal = Canal.POMODORO,
+                som = somEscolhido(context),
+                id = idDoAviso("pomodoro"),
+                titulo = "Fim do descanso 🍎",
+                texto = "Se estiver pronta, comeca outro foco. Se nao, tudo bem tambem 💗",
+                rota = Destino.POMODORO.rota,
+            )
+            return
+        }
+
         val fimEm = prefs.pomoFimEm.first()
-        if (fimEm <= 0L || System.currentTimeMillis() < fimEm) return
+        if (fimEm <= 0L || agora < fimEm) return
         if (prefs.pomodoroAvisado.first() == fimEm) return
 
         creditarPomodoroTerminado(prefs, BancoLocal.obter(context))
         prefs.marcarPomodoroAvisado(fimEm)
+
+        val minutos = prefs.pomoMinutos.first()
+
+        // O descanso comeca sozinho: e a regra do pomodoro, e um botao "agora
+        // descansar" seria so um jeito de esquecer de aperta-lo. O contrario
+        // nao vale -- quando o descanso acaba, nada recomeca; voltar a focar e
+        // decisao de quem esta ali.
+        prefs.marcarDescansoAte(agora + descansoDe(minutos) * 60_000L)
 
         // Depois de creditar, e nao antes: o pomodoro entra na conta do perfil
         // mesmo com o aviso desligado. Uma coisa e nao querer ser interrompida;
         // outra e perder as horas de foco do proprio historico.
         if (!ligado(context, Canal.POMODORO)) return
 
-        val minutos = prefs.pomoMinutos.first()
+        // Com o app na frente quem comemora e a tela, com confete e palmas (ver
+        // `Visibilidade`). Postar tambem aqui seria o mesmo fim anunciado duas
+        // vezes, com dois sons por cima um do outro.
+        if (Visibilidade.appNaFrente) return
+
         avisar(
             context = context,
             canal = Canal.POMODORO,
@@ -300,9 +338,16 @@ object Lembretes {
      * susto, nao um lembrete.
      */
     private suspend fun remarcarPomodoro(context: Context) {
-        val fimEm = Preferencias(context).pomoFimEm.first()
-        if (fimEm > System.currentTimeMillis() && ligado(context, Canal.POMODORO)) {
-            marcarAlarme(context, Tipo.POMODORO, fimEm)
+        val prefs = Preferencias(context)
+        val agora = System.currentTimeMillis()
+
+        // Um dos dois esta correndo, nunca os dois: o descanso so existe depois
+        // que o foco venceu. O `firstOrNull` escolhe o que ainda esta no futuro.
+        val proximo = listOf(prefs.pomoDescansoAte.first(), prefs.pomoFimEm.first())
+            .firstOrNull { it > agora }
+
+        if (proximo != null && ligado(context, Canal.POMODORO)) {
+            marcarAlarme(context, Tipo.POMODORO, proximo)
         } else {
             desmarcarAlarme(context, Tipo.POMODORO)
         }

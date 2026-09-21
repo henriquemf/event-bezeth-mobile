@@ -159,3 +159,21 @@ data class PomodoroEntity(
     @PrimaryKey val terminadoEm: Long,
     val minutos: Int,
 )
+
+/**
+ * Um dia do diario: a cor do humor e o texto.
+ *
+ * A chave e o DIA, como no servidor (`diary_entries`, chave composta por conta
+ * e dia). Nao ha id provisorio aqui, e nao ha como haver: o dia ja e o nome da
+ * linha nos dois lados, entao escrever offline e escrever na linha definitiva.
+ *
+ * `mood` vazio e um estado legitimo -- uma anotacao sem humor escolhido. O que
+ * nao existe e a linha com os dois campos vazios: limpar os dois APAGA (ver
+ * `Repositorio.gravarDiaDoDiario`), do mesmo jeito que no site.
+ */
+@Entity(tableName = "diario")
+data class DiarioEntity(
+    @PrimaryKey val day: String,
+    val mood: String,
+    val note: String,
+)

@@ -197,6 +197,12 @@ fun CampoDoce(
      * clicavel que sobrava no cartao. Ver [RodapeComLink].
      */
     foco: FocusRequester? = null,
+    /**
+     * Quantas linhas o campo aceita. Uma so -- o padrao -- e o de todo
+     * formulario do app; o diario pede um paragrafo, e um campo de uma linha
+     * que rola para o lado e o jeito mais rapido de nao reler o que se escreveu.
+     */
+    linhas: Int = 1,
 ) {
     var focado by remember { mutableStateOf(false) }
     val anel = if (focado) Doce.destaque.copy(alpha = 0.20f) else Color.Transparent
@@ -256,7 +262,8 @@ fun CampoDoce(
                 value = valor,
                 onValueChange = aoMudar,
                 enabled = habilitado,
-                singleLine = true,
+                singleLine = linhas == 1,
+                minLines = linhas,
                 textStyle = TipografiaBeazeth.bodyLarge.copy(color = Doce.tinta),
                 cursorBrush = SolidColor(Doce.destaque),
                 visualTransformation = if (ocultarTexto) {

@@ -194,7 +194,7 @@ fun BarraLateral(
                         color = cores.tinta,
                     )
                     Text(
-                        text = "Pomodoro",
+                        text = if (pomodoro.emDescanso) "Descanso" else "Pomodoro",
                         style = TipografiaBeazeth.bodyMedium.copy(fontSize = 11.sp),
                         color = cores.tintaSuave,
                     )

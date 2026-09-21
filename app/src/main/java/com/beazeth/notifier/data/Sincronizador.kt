@@ -4,6 +4,7 @@ import android.content.Context
 import com.beazeth.notifier.data.local.AguaDiaEntity
 import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.data.local.BlocoEntity
+import com.beazeth.notifier.data.local.DiarioEntity
 import com.beazeth.notifier.data.local.ConfigAguaEntity
 import com.beazeth.notifier.data.local.EventoEntity
 import com.beazeth.notifier.data.local.NotaEntity
@@ -264,6 +265,7 @@ class Sincronizador(private val context: Context) {
         if (m.events.isNotEmpty()) banco.eventos().gravar(m.events.map { it.paraEntidade() })
         if (m.tags.isNotEmpty()) banco.tags().gravar(m.tags.map { it.paraEntidade() })
         if (m.hydrationIntake.isNotEmpty()) banco.agua().gravar(m.hydrationIntake.map { it.paraEntidade() })
+        if (m.diaryEntries.isNotEmpty()) banco.diario().gravar(m.diaryEntries.map { it.paraEntidade() })
         m.hydrationSettings?.let { banco.agua().gravarConfig(it.paraEntidade()) }
 
         for (morto in resposta.deleted) {
@@ -276,6 +278,9 @@ class Sincronizador(private val context: Context) {
                 "planner_blocks" -> morto.id.toLongOrNull()?.let { banco.blocos().apagar(it) }
                 "events" -> morto.id.toLongOrNull()?.let { banco.eventos().apagar(it) }
                 "event_tags" -> banco.tags().apagar(morto.id)
+                // A lapide do diario traz o DIA, e nao um numero: e ele que
+                // identifica a linha nos dois lados.
+                "diary_entries" -> banco.diario().apagar(morto.id)
             }
         }
     }
@@ -333,6 +338,8 @@ fun TagJson.paraEntidade() = TagEntity(
 )
 
 fun AguaJson.paraEntidade() = AguaDiaEntity(day = day, glasses = glasses)
+
+fun DiarioJson.paraEntidade() = DiarioEntity(day = day, mood = mood, note = note)
 
 fun ConfigAguaJson.paraEntidade() = ConfigAguaEntity(
     enabled = enabled, dailyGoal = dailyGoal, glassMl = glassMl,

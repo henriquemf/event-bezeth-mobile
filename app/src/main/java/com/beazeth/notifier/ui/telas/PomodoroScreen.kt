@@ -33,6 +33,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.avisos.Lembretes
+import com.beazeth.notifier.avisos.descansoDe
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.Ampulheta
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
@@ -95,6 +96,24 @@ data class EstadoPomodoro(
      * `Preferencias.pomoCreditado`.
      */
     val fimEm: Long = 0L,
+    /**
+     * O que corre agora e o descanso, e nao o foco.
+     *
+     * Quando isto e verdadeiro, [minutos] ja e a duracao DO DESCANSO -- e o que
+     * faz o anel e a ampulheta encherem na proporcao certa sem nenhuma tela
+     * precisar saber que ha duas fases.
+     */
+    val emDescanso: Boolean = false,
+    /**
+     * O tempo de FOCO escolhido, sempre -- inclusive durante o descanso.
+     *
+     * Existe separado de [minutos] por um defeito que so apareceu rodando: no
+     * descanso, [minutos] passa a ser a duracao do intervalo (5), e o seletor
+     * de tempo, que lia dali, acendia "5 Respiro" como se a pessoa tivesse
+     * trocado a propria escolha. O mostrador quer a fase que corre; o seletor
+     * quer a escolha. Sao duas perguntas diferentes.
+     */
+    val escolhidos: Int = 25,
 ) {
     val total: Int get() = minutos * 60
 
@@ -128,13 +147,34 @@ internal fun estadoDoPomodoro(prefs: Preferencias): Flow<EstadoPomodoro> {
         prefs.pomoMinutos,
         prefs.pomoFimEm,
         prefs.pomoRestante,
+        prefs.pomoDescansoAte,
         tique,
-    ) { minutos, fimEm, guardado, _ ->
-        if (fimEm > 0L) {
-            val restante = segundosAte(fimEm)
-            EstadoPomodoro(minutos, restante, correndo = restante > 0, fimEm = fimEm)
-        } else {
-            EstadoPomodoro(minutos, guardado, correndo = false)
+    ) { minutos, fimEm, guardado, descansoAte, _ ->
+        val faltaDoDescanso = if (descansoAte > 0L) segundosAte(descansoAte) else 0
+
+        when {
+            // O descanso manda enquanto corre. Vem primeiro porque, durante
+            // ele, o `fimEm` do foco ja esta vencido e continua gravado -- e
+            // mostrar "Tempo!" no meio do intervalo apressaria justamente quem
+            // devia estar parada.
+            faltaDoDescanso > 0 -> EstadoPomodoro(
+                minutos = descansoDe(minutos),
+                restante = faltaDoDescanso,
+                correndo = true,
+                fimEm = descansoAte,
+                emDescanso = true,
+                escolhidos = minutos,
+            )
+
+            fimEm > 0L -> {
+                val restante = segundosAte(fimEm)
+                EstadoPomodoro(
+                    minutos, restante, correndo = restante > 0, fimEm = fimEm,
+                    escolhidos = minutos,
+                )
+            }
+
+            else -> EstadoPomodoro(minutos, guardado, correndo = false, escolhidos = minutos)
         }
     }
 }
@@ -181,8 +221,24 @@ internal suspend fun alternarPomodoro(context: Context, prefs: Preferencias, ban
     creditarPomodoroTerminado(prefs, banco)
 
     val minutos = prefs.pomoMinutos.first()
+
+    // Durante o descanso o botao e "Pular descanso", e nao "Pausar": encerra o
+    // intervalo e para por ali. Comecar outro foco em seguida seria decidir
+    // pela pessoa justamente no momento em que ela disse que nao queria o que
+    // estava acontecendo.
+    if (prefs.pomoDescansoAte.first() > System.currentTimeMillis()) {
+        prefs.marcarDescansoAte(0L)
+        prefs.salvarPomodoro(minutos, 0L, minutos * 60)
+        Lembretes.pomodoroMudou(context)
+        return
+    }
+
     val fimEm = prefs.pomoFimEm.first()
     val restante = if (fimEm > 0L) segundosAte(fimEm) else prefs.pomoRestante.first()
+
+    // Um descanso ja vencido, mas ainda gravado, ficaria na frente do foco
+    // novo -- inclusive no alarme.
+    prefs.marcarDescansoAte(0L)
 
     if (fimEm > 0L && restante > 0) {
         // Pausar: guarda os segundos que faltam e esquece o instante.
@@ -201,6 +257,7 @@ internal suspend fun alternarPomodoro(context: Context, prefs: Preferencias, ban
 internal suspend fun zerarPomodoro(context: Context, prefs: Preferencias, banco: BancoLocal) {
     creditarPomodoroTerminado(prefs, banco)
     val minutos = prefs.pomoMinutos.first()
+    prefs.marcarDescansoAte(0L)
     prefs.salvarPomodoro(minutos, 0L, minutos * 60)
     // Desmarca: sem isto o alarme do pomodoro que acabou de ser zerado
     // continuaria marcado e apitaria na hora em que ele TERIA terminado.
@@ -306,7 +363,7 @@ fun PomodoroScreen(vm: PomodoroViewModel = viewModel()) {
                             TempoPronto(
                                 minutos = min,
                                 rotulo = rotulo,
-                                ativo = min == estado.minutos,
+                                ativo = min == estado.escolhidos,
                                 // Trocar o tempo com o timer rodando confundiria
                                 // o que o anel esta mostrando. O site tambem tranca.
                                 habilitado = !estado.correndo,
@@ -327,14 +384,14 @@ fun PomodoroScreen(vm: PomodoroViewModel = viewModel()) {
                         color = cores.tintaSuave,
                     )
                     Text(
-                        text = "${estado.minutos} min",
+                        text = "${estado.escolhidos} min",
                         style = TipografiaBeazeth.titleMedium,
                         color = cores.tinta,
                     )
                 }
 
                 Slider(
-                    value = estado.minutos.coerceAtMost(120).toFloat(),
+                    value = estado.escolhidos.coerceAtMost(120).toFloat(),
                     onValueChange = { vm.definirMinutos(it.toInt()) },
                     valueRange = MIN_MINUTOS.toFloat()..120f,
                     enabled = !estado.correndo,
@@ -435,6 +492,9 @@ private fun ControlesDoTempo(
 
     Text(
         text = when {
+            // O descanso primeiro: durante ele o cronometro corre, e "Focando…"
+            // seria o oposto do que a tela devia dizer.
+            estado.emDescanso -> "Descanso 💗"
             estado.restante <= 0 -> "Tempo!"
             estado.correndo -> "Focando…"
             estado.restante < estado.total -> "Pausado"
@@ -445,7 +505,11 @@ private fun ControlesDoTempo(
     )
 
     BotaoPrimario(
-        texto = if (estado.correndo) "Pausar" else "Começar",
+        texto = when {
+            estado.emDescanso -> "Pular descanso"
+            estado.correndo -> "Pausar"
+            else -> "Começar"
+        },
         aoTocar = vm::alternar,
     )
 

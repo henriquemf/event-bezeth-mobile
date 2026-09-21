@@ -29,7 +29,7 @@ O emulador de trabalho é esse aparelho (`Galaxy_Tab_A9_Plus`, com
 
 ## O que o app faz
 
-Sete telas do site, na mesma ordem do menu lateral, mais uma que o site não
+Oito telas do site, na mesma ordem do menu lateral, mais uma que o site não
 tem: a de perfil.
 
 | Tela | O que dá para fazer |
@@ -38,8 +38,9 @@ tem: a de perfil.
 | **Agenda** | Grade do mês no tamanho do site, com os eventos escritos dentro do dia (hora, título e o ponto da cor da tag) e os dias dos meses vizinhos em tom apagado. Ao lado, "Próximos eventos", que olha sempre de hoje para a frente. Tocar num dia acende a célula e já abre o formulário naquela data; tocar num evento abre ele; segurar um evento e largar em outro dia muda a data e preserva a hora. |
 | **Weekly Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
-| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim, avisa na barra de notificação, mesmo com o app fechado e a tela apagada. |
+| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima). Com o app fechado, quem avisa é a barra de notificação. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida no site — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
+| **Diário** | O ano inteiro em quadradinhos, um por dia — doze colunas de mês, trinta e uma linhas. Tocar num dia abre uma folha por baixo com os seis humores e o espaço de escrever; a cor pinta o quadradinho e um ponto marca "tem texto aqui". O que se digita desce para o banco a cada pausa, então fechar a folha com um arrasto não perde nada. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
 | **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). Os avisos: quais existem, com que som (com botão de ouvir), e o que a tela bloqueada mostra. No fim, a sincronização e a saída da conta. |
 
@@ -119,7 +120,7 @@ ao abrir o app, e de hora em hora como rede de segurança.
 
 ### Sem conta
 
-Na tela de entrar há **"Usar só neste aparelho"**. É o app inteiro — as sete
+Na tela de entrar há **"Usar só neste aparelho"**. É o app inteiro — as oito
 telas, as dez paletas —, sem login, sem servidor e sem rede. O que sai é a
 metade que fala com o mundo: a fila de envio não recebe nada e o worker nunca é
 agendado.
@@ -412,6 +413,7 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Alarmes.kt           o AlarmManager: um alarme por assunto, sempre o próximo
 │   ├── Lembretes.kt         quem decide o que avisar e quando tocar de novo
 │   ├── Agua.kt              o próximo copo: um intervalo depois do último, dentro da janela
+│   ├── Festa.kt            as palmas do fim do foco, e quanto dura o descanso
 │   ├── Eventos.kt           os gatilhos da agenda, com as regras do site
 │   └── Receptores.kt        o alarme tocou / o aparelho religou
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando
@@ -420,10 +422,11 @@ app/src/main/java/com/beazeth/notifier/
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
     ├── componentes/         o que se repete: cartão, campo, botão, lateral, retrato
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
+    │                        (diario/ é a grade do ano, os humores e a folha)
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 66 arquivos Kotlin, ~15,7 mil linhas. **Nenhum passa de 700 linhas** — quando
+São 72 arquivos Kotlin, ~16,9 mil linhas. **Nenhum passa de 700 linhas** — quando
 um chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
 `calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
 vez de um).

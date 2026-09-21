@@ -35,6 +35,7 @@ import com.beazeth.notifier.ui.Sessao
 import com.beazeth.notifier.ui.SessaoViewModel
 import com.beazeth.notifier.avisos.EXTRA_DESTINO
 import com.beazeth.notifier.avisos.Lembretes
+import com.beazeth.notifier.avisos.Visibilidade
 import com.beazeth.notifier.ui.componentes.FundoDoce
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.data.Preferencias
@@ -137,7 +138,16 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        // Com o app na frente, quem anuncia o fim do foco e o confete com as
+        // palmas, e nao a barra de notificacao -- os dois juntos seriam dois
+        // sons por cima um do outro. Ver `Visibilidade`.
+        Visibilidade.appNaFrente = true
         lifecycleScope.launch { Lembretes.rearmar(applicationContext) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Visibilidade.appNaFrente = false
     }
 
     /**

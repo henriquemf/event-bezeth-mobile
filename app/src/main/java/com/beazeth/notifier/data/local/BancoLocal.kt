@@ -29,8 +29,9 @@ import kotlinx.coroutines.withContext
         ConfigAguaEntity::class,
         PendenciaEntity::class,
         PomodoroEntity::class,
+        DiarioEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class BancoLocal : RoomDatabase() {
@@ -43,6 +44,7 @@ abstract class BancoLocal : RoomDatabase() {
     abstract fun agua(): AguaDao
     abstract fun pendencias(): PendenciaDao
     abstract fun pomodoros(): PomodoroDao
+    abstract fun diario(): DiarioDao
 
     companion object {
         /**
@@ -67,6 +69,28 @@ abstract class BancoLocal : RoomDatabase() {
             }
         }
 
+        /**
+         * A tabela do diario, que a versao 2 nao tinha.
+         *
+         * Acrescenta e so, como a anterior: nenhuma tabela existente e tocada,
+         * entao o que ja esta no aparelho -- inclusive o que espera rede na
+         * fila -- atravessa intacto.
+         *
+         * O SQL sai do esquema exportado (`app/schemas/.../3.json`) letra por
+         * letra, crases inclusive. O Room compara a tabela criada aqui com a
+         * que ele esperava e LANCA se houver diferenca; escrever "de cabeca" e
+         * como esta migracao quebra.
+         */
+        private val DE_2_PARA_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `diario` " +
+                        "(`day` TEXT NOT NULL, `mood` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, PRIMARY KEY(`day`))"
+                )
+            }
+        }
+
         @Volatile
         private var instancia: BancoLocal? = null
 
@@ -84,7 +108,7 @@ abstract class BancoLocal : RoomDatabase() {
                     context.applicationContext,
                     BancoLocal::class.java,
                     "beazeth.db",
-                ).addMigrations(DE_1_PARA_2).build().also { instancia = it }
+                ).addMigrations(DE_1_PARA_2, DE_2_PARA_3).build().also { instancia = it }
             }
 
         /**

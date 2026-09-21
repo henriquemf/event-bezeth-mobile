@@ -5,6 +5,7 @@ import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.local.AguaDiaEntity
 import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.data.local.BlocoEntity
+import com.beazeth.notifier.data.local.DiarioEntity
 import com.beazeth.notifier.data.local.EventoEntity
 import com.beazeth.notifier.data.local.NotaEntity
 import com.beazeth.notifier.data.local.PendenciaEntity
@@ -68,6 +69,10 @@ class Repositorio(private val context: Context) {
 
     /** Todos os dias com registro, para o historico da tela de agua. */
     fun historicoDeAgua(): Flow<List<AguaDiaEntity>> = banco.agua().observarTodos()
+
+    /** Os dias escritos no diario dentro de um ano. */
+    fun diarioDoAno(ano: Int): Flow<List<DiarioEntity>> =
+        banco.diario().observarIntervalo("$ano-01-01", "$ano-12-31")
 
     fun configDeAgua() = banco.agua().observarConfig()
 
@@ -333,6 +338,54 @@ class Repositorio(private val context: Context) {
         )
     }
 
+    // ------------------------------------------------------------- diario
+
+    /**
+     * Grava (ou apaga) um dia do diario.
+     *
+     * Humor e texto vazios APAGAM a linha, como no site: um dia sem nada nao e
+     * um dia em branco guardado, e um quadradinho sem cor. O `PUT` sobe a
+     * mesma decisao, e o servidor devolve `entry: null` quando apagou.
+     *
+     * Nao ha id provisorio: o dia ja e o nome da linha dos dois lados, entao
+     * escrever offline escreve na linha definitiva e a subida so repete o que
+     * o aparelho ja sabe.
+     */
+    /**
+     * Guarda o que esta sendo escrito, sem passar pela fila de rede.
+     *
+     * Mesmo motivo de [rascunharNota]: a folha do editor pode ser fechada com
+     * um arrasto, e o que so existia na memoria dela morreria junto. A fila
+     * fica de fora porque subir a cada pausa encheria a fila de PUTs que so se
+     * sobrescrevem; a subida acontece uma vez, ao fechar.
+     */
+    suspend fun rascunharDiaDoDiario(dia: String, humor: String, texto: String) {
+        gravarNoAparelho(dia, humor, texto)
+    }
+
+    private suspend fun gravarNoAparelho(dia: String, humor: String, texto: String) {
+        val limpo = texto.trim().take(MAX_TEXTO_DO_DIARIO)
+        if (humor.isEmpty() && limpo.isEmpty()) {
+            banco.diario().apagar(dia)
+        } else {
+            banco.diario().gravar(DiarioEntity(day = dia, mood = humor, note = limpo))
+        }
+    }
+
+    suspend fun gravarDiaDoDiario(dia: String, humor: String, texto: String) {
+        gravarNoAparelho(dia, humor, texto)
+
+        enfileirar(
+            metodo = "PUT",
+            caminho = "/api/diary/$dia",
+            corpo = buildJsonObject {
+                put("mood", humor)
+                put("note", texto.trim().take(MAX_TEXTO_DO_DIARIO))
+            },
+            entidade = ALVO_DIARIO,
+        )
+    }
+
     // ------------------------------------------------------------ eventos
 
     /**
@@ -560,6 +613,24 @@ class Repositorio(private val context: Context) {
             )
         }
 
+        // O diario nao tem id provisorio, entao a adocao manda TODOS os dias
+        // escritos. Diferente da agua, que fica de fora de proposito: somar os
+        // copos locais aos da conta contaria o mesmo copo duas vezes. Aqui a
+        // escrita e por dia e substitui, entao o pior caso e um dia que existia
+        // nos dois lugares ficar com a versao do aparelho -- e perder o que foi
+        // escrito aqui seria pior, porque no modo local este era o unico lugar.
+        for (dia in banco.diario().todos()) {
+            enfileirar(
+                metodo = "PUT",
+                caminho = "/api/diary/${dia.day}",
+                corpo = buildJsonObject {
+                    put("mood", dia.mood)
+                    put("note", dia.note)
+                },
+                entidade = ALVO_DIARIO,
+            )
+        }
+
         for (evento in banco.eventos().provisorios()) {
             enfileirar(
                 metodo = "POST",
@@ -638,6 +709,10 @@ class Repositorio(private val context: Context) {
         const val MAX_TAREFAS_POR_DIA = 60
 
         const val ALVO_AGUA = "agua"
+        const val ALVO_DIARIO = "diario"
+
+        /** Espelha `MAX_NOTE`, validado em `app/db/diary.py`. */
+        const val MAX_TEXTO_DO_DIARIO = 2000
 
         /** Espelham `DEFAULT_SIZE` e `NOTE_BOUNDS` do quadro do site
          *  (`js/pages/notes/constants.js` e `app/db/notes.py`). */

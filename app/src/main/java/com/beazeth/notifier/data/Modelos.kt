@@ -35,6 +35,7 @@ data class Mudancas(
     val events: List<EventoJson> = emptyList(),
     val tags: List<TagJson> = emptyList(),
     val hydrationIntake: List<AguaJson> = emptyList(),
+    val diaryEntries: List<DiarioJson> = emptyList(),
     /** `null` aqui significa "nao mudou", e nao "nao existe". */
     val hydrationSettings: ConfigAguaJson? = null,
 )
@@ -107,6 +108,18 @@ data class TagJson(
 data class AguaJson(
     val day: String = "",
     val glasses: Int = 0,
+)
+
+/**
+ * Um dia do diario, como o servidor manda.
+ *
+ * `day` e a identidade nos dois lados -- nao ha id. Ver `DiarioEntity`.
+ */
+@Serializable
+data class DiarioJson(
+    val day: String = "",
+    val mood: String = "",
+    val note: String = "",
 )
 
 @Serializable

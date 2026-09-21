@@ -41,6 +41,9 @@ class Preferencias(private val context: Context) {
     private val chaveAvisoDeEvento = longPreferencesKey("aviso_de_evento_ate")
     private val chaveSomDoAviso = stringPreferencesKey("som_do_aviso")
     private val chaveNomeNaTelaBloqueada = booleanPreferencesKey("nome_na_tela_bloqueada")
+    private val chavePomoDescansoAte = longPreferencesKey("pomo_descanso_ate")
+    private val chavePomoFestejado = longPreferencesKey("pomo_festejado")
+    private val chaveFesta = booleanPreferencesKey("festa_do_pomodoro")
     private val chaveAguaMarco = longPreferencesKey("agua_marco_em")
     private val chaveAguaProximo = longPreferencesKey("agua_proximo_em")
 
@@ -186,6 +189,47 @@ class Preferencias(private val context: Context) {
 
     suspend fun marcarAvisoDeEventoAte(instante: Long) {
         context.prefsAparencia.edit { it[chaveAvisoDeEvento] = instante }
+    }
+
+    /**
+     * Quando o descanso termina, ou zero se nao ha descanso correndo.
+     *
+     * O descanso comeca sozinho quando o foco acaba -- essa e a regra do
+     * pomodoro, e um botao "agora descansar" seria so um jeito de esquecer de
+     * aperta-lo. Guardar o INSTANTE do fim, e nao os segundos restantes, e a
+     * mesma escolha de `pomoFimEm`: a conta e feita pelo relogio quando alguem
+     * olha, entao fechar o app nao desalinha nada.
+     *
+     * Voltar a zero e o que diz "o descanso acabou e ja foi anunciado" -- por
+     * isso nao ha um carimbo separado para ele.
+     */
+    val pomoDescansoAte: Flow<Long> =
+        context.prefsAparencia.data.map { it[chavePomoDescansoAte] ?: 0L }
+
+    suspend fun marcarDescansoAte(instante: Long) {
+        context.prefsAparencia.edit { it[chavePomoDescansoAte] = instante }
+    }
+
+    /**
+     * O pomodoro cuja festa ja aconteceu, pelo instante em que terminou.
+     *
+     * Sem este carimbo, reabrir o app com um pomodoro vencido soltaria confete
+     * de novo -- e de novo a cada abertura, porque `pomoFimEm` continua gravado
+     * ate alguem comecar outro.
+     */
+    val pomodoroFestejado: Flow<Long> =
+        context.prefsAparencia.data.map { it[chavePomoFestejado] ?: 0L }
+
+    suspend fun marcarPomodoroFestejado(instante: Long) {
+        context.prefsAparencia.edit { it[chavePomoFestejado] = instante }
+    }
+
+    /** Confete e palmas no fim do foco. Ligado de fabrica. */
+    val festaDoPomodoro: Flow<Boolean> =
+        context.prefsAparencia.data.map { it[chaveFesta] ?: true }
+
+    suspend fun definirFestaDoPomodoro(ligada: Boolean) {
+        context.prefsAparencia.edit { it[chaveFesta] = ligada }
     }
 
     /**
