@@ -3,7 +3,9 @@ package com.beazeth.notifier.avisos
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import com.beazeth.notifier.data.Preferencias
+import com.beazeth.notifier.data.nomeDoSub
 import com.beazeth.notifier.data.local.BancoLocal
+import com.beazeth.notifier.data.local.PomodoroEntity
 import com.beazeth.notifier.ui.componentes.Destino
 import com.beazeth.notifier.ui.telas.creditarPomodoroTerminado
 import kotlinx.coroutines.flow.first
@@ -60,6 +62,7 @@ object Lembretes {
         resolverAgenda(app)
         remarcarAgua(app)
         remarcarPomodoro(app)
+        remarcarSubs(app)
     }
 
     /** O alarme de [tipo] tocou. */
@@ -73,6 +76,10 @@ object Lembretes {
             Tipo.POMODORO -> {
                 entregarPomodoro(app)
                 remarcarPomodoro(app)
+            }
+            Tipo.SUBPOMODORO -> {
+                entregarSubs(app)
+                remarcarSubs(app)
             }
             // A agenda resolve entrega e remarcacao na mesma passada: as duas
             // saem da mesma lista ordenada de gatilhos, e percorre-la duas
@@ -246,6 +253,16 @@ object Lembretes {
      */
     suspend fun pomodoroMudou(context: Context) = remarcarPomodoro(context.applicationContext)
 
+    /**
+     * Algum dos outros pomodoros mudou: nasceu, começou, pausou, zerou, trocou
+     * de tempo ou foi removido.
+     *
+     * Irmao de [pomodoroMudou], e existe pelo mesmo motivo: sao toques no meio
+     * de uma interacao, e recalcular a agenda inteira a cada um seria trabalho
+     * a toa na thread de quem esta olhando.
+     */
+    suspend fun subsMudaram(context: Context) = remarcarSubs(context.applicationContext)
+
     // ------------------------------------------------------------ pomodoro
 
     /**
@@ -350,6 +367,117 @@ object Lembretes {
             marcarAlarme(context, Tipo.POMODORO, proximo)
         } else {
             desmarcarAlarme(context, Tipo.POMODORO)
+        }
+    }
+
+    // -------------------------------------------------------- sub-pomodoros
+
+    /**
+     * Anuncia os sub-pomodoros que chegaram ao fim, credita e comeca o descanso
+     * de cada um.
+     *
+     * A mesma ordem de [entregarPomodoro] -- descanso antes do foco -- e pelo
+     * mesmo motivo: enquanto o intervalo corre, o `fimEm` do foco ja venceu e
+     * continua gravado, e sem esta saida o fim do foco seria julgado de novo a
+     * cada rodada.
+     *
+     * A lista inteira e percorrida numa passada so e gravada uma vez: sao ate
+     * dez, e dez gravacoes no DataStore seriam dez idas ao disco para uma
+     * mudanca que aconteceu no mesmo instante.
+     */
+    private suspend fun entregarSubs(context: Context) {
+        val prefs = Preferencias(context)
+        val lista = prefs.subsDoPomodoro.first()
+        if (lista.isEmpty()) return
+
+        val agora = System.currentTimeMillis()
+        val banco = BancoLocal.obter(context)
+        val avisaveis = ligado(context, Canal.POMODORO)
+        val som = somEscolhido(context)
+        var mudou = false
+
+        val novos = lista.mapIndexed { indice, sub ->
+            val nome = nomeDoSub(sub.nome, indice)
+
+            if (sub.descansoAte > 0L) {
+                if (agora < sub.descansoAte) return@mapIndexed sub
+                mudou = true
+                if (avisaveis && !Visibilidade.appNaFrente) {
+                    avisar(
+                        context = context,
+                        canal = Canal.POMODORO,
+                        som = som,
+                        id = idDoAviso("sub-" + sub.id),
+                        titulo = "Fim do descanso — $nome",
+                        texto = "Se estiver pronta, comeca outro foco. Se nao, tudo bem tambem 💗",
+                        rota = Destino.POMODORO.rota,
+                    )
+                }
+                return@mapIndexed sub.copy(descansoAte = 0L)
+            }
+
+            if (sub.fimEm <= 0L || agora < sub.fimEm) return@mapIndexed sub
+            if (sub.avisado == sub.fimEm) return@mapIndexed sub
+
+            mudou = true
+
+            // O credito entra na conta do perfil mesmo com o aviso desligado:
+            // uma coisa e nao querer ser interrompida, outra e perder as horas
+            // de foco do proprio historico.
+            if (sub.creditado != sub.fimEm) {
+                banco.pomodoros().gravar(
+                    PomodoroEntity(terminadoEm = sub.fimEm, minutos = sub.minutos),
+                )
+            }
+
+            // Com o app na frente quem comemora e a tela, com confete e palmas
+            // (ver `Visibilidade`). Postar aqui tambem seria o mesmo fim
+            // anunciado duas vezes, com dois sons por cima um do outro.
+            if (avisaveis && !Visibilidade.appNaFrente) {
+                avisar(
+                    context = context,
+                    canal = Canal.POMODORO,
+                    som = som,
+                    id = idDoAviso("sub-" + sub.id),
+                    titulo = "Tempo, momo! 🍎 — $nome",
+                    texto = if (sub.minutos == 1) {
+                        "Um minuto de foco. Agora levanta, espreguiça e bebe uma água 💗"
+                    } else {
+                        "${sub.minutos} minutos de foco. Agora levanta, espreguiça e bebe uma água 💗"
+                    },
+                    rota = Destino.POMODORO.rota,
+                )
+            }
+
+            // O descanso comeca sozinho, como no principal.
+            sub.copy(
+                avisado = sub.fimEm,
+                creditado = sub.fimEm,
+                descansoAte = agora + descansoDe(sub.minutos) * 60_000L,
+            )
+        }
+
+        if (mudou) prefs.salvarSubs(novos)
+    }
+
+    /**
+     * Um alarme so para os dez, marcado para o PROXIMO que vencer.
+     *
+     * E a mesma regra da agenda (ver `Alarmes`): quando ele toca, quem entrega
+     * recalcula e remarca. Sem isto seriam ate vinte alarmes exatos -- foco e
+     * descanso de cada sub -- para manter em dia a cada toque de botao.
+     */
+    private suspend fun remarcarSubs(context: Context) {
+        val agora = System.currentTimeMillis()
+        val proximo = Preferencias(context).subsDoPomodoro.first()
+            .flatMap { listOf(it.descansoAte, it.fimEm) }
+            .filter { it > agora }
+            .minOrNull()
+
+        if (proximo != null && ligado(context, Canal.POMODORO)) {
+            marcarAlarme(context, Tipo.SUBPOMODORO, proximo)
+        } else {
+            desmarcarAlarme(context, Tipo.SUBPOMODORO)
         }
     }
 

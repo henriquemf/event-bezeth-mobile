@@ -42,6 +42,7 @@ class Preferencias(private val context: Context) {
     private val chaveSomDoAviso = stringPreferencesKey("som_do_aviso")
     private val chaveNomeNaTelaBloqueada = booleanPreferencesKey("nome_na_tela_bloqueada")
     private val chavePomoDescansoAte = longPreferencesKey("pomo_descanso_ate")
+    private val chaveSubs = stringPreferencesKey("pomo_subs")
     private val chavePomoFestejado = longPreferencesKey("pomo_festejado")
     private val chaveFesta = booleanPreferencesKey("festa_do_pomodoro")
     private val chaveAguaMarco = longPreferencesKey("agua_marco_em")
@@ -261,6 +262,20 @@ class Preferencias(private val context: Context) {
 
     suspend fun marcarProximoCopo(instante: Long) {
         context.prefsAparencia.edit { it[chaveAguaProximo] = instante }
+    }
+
+    /**
+     * Os outros pomodoros da tela, ate dez. Ver [SubPomodoro].
+     *
+     * Uma chave so para a lista inteira, e nao seis chaves por sub: sessenta
+     * chaves com numero no nome dariam um `combine` de sessenta fluxos para
+     * responder "o que esta correndo agora".
+     */
+    val subsDoPomodoro: Flow<List<SubPomodoro>> =
+        context.prefsAparencia.data.map { lerSubs(it[chaveSubs]) }
+
+    suspend fun salvarSubs(lista: List<SubPomodoro>) {
+        context.prefsAparencia.edit { it[chaveSubs] = escreverSubs(lista) }
     }
 
     suspend fun salvarPomodoro(minutos: Int, fimEm: Long, restante: Int) {

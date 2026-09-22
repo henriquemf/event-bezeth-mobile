@@ -44,6 +44,7 @@ import com.beazeth.notifier.ui.LocalModoLocal
 import com.beazeth.notifier.ui.telas.EstadoPomodoro
 import com.beazeth.notifier.ui.telas.alternarPomodoro
 import com.beazeth.notifier.ui.telas.estadoDoPomodoro
+import com.beazeth.notifier.ui.telas.quantosSubsCorrendo
 import com.beazeth.notifier.ui.telas.zerarPomodoro
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
@@ -103,6 +104,10 @@ fun BarraLateral(
 
     val fluxoDoPomodoro = remember { estadoDoPomodoro(prefs) }
     val pomodoro by fluxoDoPomodoro.collectAsState(EstadoPomodoro())
+    // Os outros pomodoros nao ganham widget aqui -- dez caixas empilhadas
+    // empurrariam o menu para fora da tela. O que a lateral precisa dizer e um
+    // numero em cima do link do Pomodoro.
+    val subsCorrendo by remember { quantosSubsCorrendo(prefs) }.collectAsState(0)
     val diaDeAgua by remember { repo.aguaDeHoje() }.collectAsState(null)
     val configDeAgua by remember { repo.configDeAgua() }.collectAsState(null)
 
@@ -165,6 +170,7 @@ fun BarraLateral(
                 LinkDoMenu(
                     destino = destino,
                     ativo = destino == atual,
+                    selo = if (destino == Destino.POMODORO) subsCorrendo else 0,
                     aoTocar = { aoTrocar(destino) },
                 )
             }
@@ -308,7 +314,7 @@ private fun Caixa(conteudo: @Composable () -> Unit) {
 
 /** Um `.menu-link`: icone, rotulo, e a faixa de destaque de quem esta ativo. */
 @Composable
-private fun LinkDoMenu(destino: Destino, ativo: Boolean, aoTocar: () -> Unit) {
+private fun LinkDoMenu(destino: Destino, ativo: Boolean, selo: Int, aoTocar: () -> Unit) {
     val cores = Doce
     Row(
         modifier = Modifier
@@ -330,7 +336,11 @@ private fun LinkDoMenu(destino: Destino, ativo: Boolean, aoTocar: () -> Unit) {
             color = if (ativo) cores.destaqueEscuro else cores.tinta,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            // O peso vai no rotulo e nao num espacador: assim um nome comprido
+            // encurta com reticencias em vez de empurrar o selo para fora.
+            modifier = Modifier.weight(1f),
         )
+        SeloDeContagem(quantos = selo)
     }
 }
 

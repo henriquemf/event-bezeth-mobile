@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.descansoDe
 import com.beazeth.notifier.data.Preferencias
+import com.beazeth.notifier.data.segundosAte
 import com.beazeth.notifier.ui.componentes.Ampulheta
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
@@ -50,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
@@ -137,12 +139,7 @@ data class EstadoPomodoro(
  * acumularia erro, e um pomodoro de 25 minutos terminaria em 26.
  */
 internal fun estadoDoPomodoro(prefs: Preferencias): Flow<EstadoPomodoro> {
-    val tique = flow {
-        while (true) {
-            emit(Unit)
-            delay(1_000)
-        }
-    }
+    val tique = tiqueDeUmSegundo()
     return combine(
         prefs.pomoMinutos,
         prefs.pomoFimEm,
@@ -178,6 +175,38 @@ internal fun estadoDoPomodoro(prefs: Preferencias): Flow<EstadoPomodoro> {
         }
     }
 }
+
+/**
+ * Um pulso por segundo, para quem deriva estado do RELOGIO.
+ *
+ * Nada aqui conta nada: o pulso so diz "olhe de novo". Quem olha refaz a conta a
+ * partir do relogio do sistema, e por isso um `delay` atrasado -- e ele atrasa,
+ * sob carga ou com a tela apagada -- nao acumula erro.
+ */
+internal fun tiqueDeUmSegundo(): Flow<Unit> = flow {
+    while (true) {
+        emit(Unit)
+        delay(1_000)
+    }
+}
+
+/**
+ * O fim de foco do pomodoro principal que a casca ainda nao resolveu, ou zero.
+ *
+ * "Resolveu" quer dizer creditado, descanso comecado e decidido se havia festa
+ * -- e o carimbo de tudo isso e `pomodoroFestejado`.
+ *
+ * **Nao serve olhar para "terminou e ainda nao esta em descanso"**, que era como
+ * isto funcionava: o alarme vence no instante exato do fim e o pulso da tela
+ * chega ate um segundo depois, entao quase sempre o alarme comecava o descanso
+ * primeiro e a condicao nunca era verdadeira com o app aberto. O confete
+ * simplesmente nao saia. Perguntar pelo carimbo nao tem corrida: quem chegar
+ * primeiro faz, e quem chegar depois ve feito.
+ */
+internal fun fimDePomodoroPendente(prefs: Preferencias): Flow<Long> =
+    combine(prefs.pomoFimEm, prefs.pomodoroFestejado, tiqueDeUmSegundo()) { fimEm, festejado, _ ->
+        if (fimEm > 0L && System.currentTimeMillis() >= fimEm && festejado != fimEm) fimEm else 0L
+    }.distinctUntilChanged()
 
 /**
  * Anota um pomodoro que chegou ao fim, para a tela de perfil somar.
@@ -263,9 +292,6 @@ internal suspend fun zerarPomodoro(context: Context, prefs: Preferencias, banco:
     // continuaria marcado e apitaria na hora em que ele TERIA terminado.
     Lembretes.pomodoroMudou(context)
 }
-
-private fun segundosAte(instante: Long): Int =
-    (((instante - System.currentTimeMillis()) + 999) / 1_000).coerceAtLeast(0).toInt()
 
 class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -413,6 +439,10 @@ fun PomodoroScreen(vm: PomodoroViewModel = viewModel()) {
                 )
             }
         }
+
+        // Os outros pomodoros, ate dez. Sao daqui e so daqui: a casca mostra
+        // apenas o principal. Ver `SubsDoPomodoro.kt`.
+        item { SecaoDosSubs() }
     }
 }
 

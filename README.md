@@ -38,7 +38,7 @@ tem: a de perfil.
 | **Agenda** | Grade do mês no tamanho do site, com os eventos escritos dentro do dia (hora, título e o ponto da cor da tag) e os dias dos meses vizinhos em tom apagado. Ao lado, "Próximos eventos", que olha sempre de hoje para a frente. Tocar num dia acende a célula e já abre o formulário naquela data; tocar num evento abre ele; segurar um evento e largar em outro dia muda a data e preserva a hora. |
 | **Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
-| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima). Com o app fechado, quem avisa é a barra de notificação. |
+| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima). Com o app fechado, quem avisa é a barra de notificação. Abaixo, **até dez outros pomodoros**, cada um com nome, tempo e contagem próprios, em cartão aberto ou minimizado; com algum deles correndo, o item Pomodoro do menu ganha um número. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida no site — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
 | **Diário** | O ano inteiro em quadradinhos, um por dia — doze colunas de mês, trinta e uma linhas. Tocar num dia abre uma folha por baixo com os seis humores e o espaço de escrever; a cor pinta o quadradinho e um ponto marca "tem texto aqui". O que se digita desce para o banco a cada pausa, então fechar a folha com um arrasto não perde nada. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
@@ -406,6 +406,7 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Perfil.kt            a foto (corte, giro e disco) e o nome de quem usa sem conta
 │   ├── Estatisticas.kt      as contas da tela de perfil, todas saindo do Room
 │   ├── Preferencias.kt      tema, fonte, modo escuro, estado do pomodoro e as marcas d'água dos avisos
+│   ├── SubPomodoro.kt       os outros dez pomodoros: o registro, o relógio e o disco
 │   └── local/               Room: entidades, DAOs e o banco
 ├── avisos/
 │   ├── Avisos.kt            os três canais, a visibilidade e o ato de postar
@@ -422,14 +423,16 @@ app/src/main/java/com/beazeth/notifier/
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
     ├── componentes/         o que se repete: cartão, campo, botão, lateral, retrato
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
-    │                        (diario/ é a grade do ano, os humores e a folha)
+    │                        (diario/ é a grade do ano, os humores e a folha;
+    │                        SubsDoPomodoro.kt são os outros dez cronômetros)
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 72 arquivos Kotlin, ~16,9 mil linhas. **Nenhum passa de 700 linhas** — quando
-um chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
+São 74 arquivos Kotlin, ~17,9 mil linhas. O limite é **700 linhas**: quando um
+chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
 `calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
-vez de um).
+vez de um). Hoje só `data/Repositorio.kt` passou disso, com 731 — está na fila
+para se dividir.
 
 ---
 

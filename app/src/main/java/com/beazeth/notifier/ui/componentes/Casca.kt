@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,12 +35,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.beazeth.notifier.data.Preferencias
+import com.beazeth.notifier.ui.telas.quantosSubsCorrendo
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
@@ -114,6 +118,13 @@ fun BarraInferior(
     // capturada aqui fora.
     val cores = Doce
 
+    // Lido aqui, e nao recebido de cima: a lateral ja le o proprio estado do
+    // pomodoro do mesmo jeito, e passar o numero pela casca so faria a casca
+    // inteira recompor por causa de uma bolinha.
+    val contexto = LocalContext.current.applicationContext
+    val prefs = remember { Preferencias(contexto) }
+    val subsCorrendo by remember { quantosSubsCorrendo(prefs) }.collectAsState(0)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -140,6 +151,9 @@ fun BarraInferior(
             ItemDaBarra(
                 destino = destino,
                 ativo = destino == atual,
+                // So o pomodoro tem selo, e so quando ha outro contando fora
+                // da tela dele.
+                selo = if (destino == Destino.POMODORO) subsCorrendo else 0,
                 aoTocar = { aoTrocar(destino) },
                 modifier = Modifier.weight(1f),
             )
@@ -168,6 +182,7 @@ fun janelaDeitada(): Boolean {
 private fun ItemDaBarra(
     destino: Destino,
     ativo: Boolean,
+    selo: Int,
     aoTocar: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -216,13 +231,24 @@ private fun ItemDaBarra(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = destino.icone,
-            fontSize = 23.sp,
-            modifier = Modifier
-                .offset(y = subida.dp)
-                .scale(destaque * recuo),
-        )
+        Box {
+            Text(
+                text = destino.icone,
+                fontSize = 23.sp,
+                modifier = Modifier
+                    .offset(y = subida.dp)
+                    .scale(destaque * recuo),
+            )
+            // No canto do icone, como contador de app de celular. Fora do
+            // `scale`: o selo nao cresce junto com o item ativo, senao viraria
+            // o que a tela mostra de maior.
+            SeloDeContagem(
+                quantos = selo,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 11.dp, y = (-4).dp),
+            )
+        }
         Text(
             text = destino.curto,
             style = TipografiaBeazeth.bodyMedium.copy(
@@ -344,6 +370,36 @@ private fun BotaoRedondo(aoTocar: () -> Unit, conteudo: @Composable () -> Unit) 
  * Sao duas classes la porque o CSS as usa em papeis diferentes; aqui e um
  * componente so, com um parametro para o titulo.
  */
+/**
+ * O numero em cima de um item de menu.
+ *
+ * Hoje so o Pomodoro tem um, para dizer que existe sub-pomodoro contando fora
+ * da tela. E NUMERO e nao bolinha colorida: "2" diz quantos sao, e quem nao
+ * distingue a cor do fundo continua sabendo que ha algo ali.
+ *
+ * Zero nao desenha nada -- nem uma caixa vazia de largura zero, que ainda assim
+ * entraria na conta do layout.
+ */
+@Composable
+fun SeloDeContagem(quantos: Int, modifier: Modifier = Modifier) {
+    if (quantos <= 0) return
+    val cores = Doce
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(cores.destaque)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "$quantos",
+            style = TipografiaBeazeth.titleMedium.copy(fontSize = 10.sp),
+            color = cores.superficie,
+        )
+    }
+}
+
 @Composable
 fun CartaoDaTela(
     modifier: Modifier = Modifier,

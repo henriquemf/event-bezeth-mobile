@@ -30,9 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.beazeth.notifier.sync.SyncWorker
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.Tipo
 import com.beazeth.notifier.avisos.tocarPalmas
@@ -46,7 +44,8 @@ import com.beazeth.notifier.ui.telas.diario.DiarioScreen
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.telas.AparenciaScreen
 import com.beazeth.notifier.ui.telas.PomodoroScreen
-import com.beazeth.notifier.ui.telas.estadoDoPomodoro
+import com.beazeth.notifier.ui.telas.fimDePomodoroPendente
+import com.beazeth.notifier.ui.telas.fimDeSubPendente
 import com.beazeth.notifier.ui.telas.perfil.PerfilScreen
 import com.beazeth.notifier.ui.telas.TodoScreen
 import com.beazeth.notifier.ui.telas.calendario.CalendarioScreen
@@ -143,34 +142,53 @@ fun CascaApp(
     LaunchedEffect(Unit) {
         val app = contexto.applicationContext
         val prefs = Preferencias(app)
-        estadoDoPomodoro(prefs)
-            // O fluxo bate a cada segundo, e "terminado" continua verdade ate
-            // alguem tocar em Começar. Sem reduzir a UM valor por pomodoro, o
-            // trabalho seria pedido sessenta vezes por minuto para nao fazer
-            // nada -- a checagem e barata, mas nao de graca.
-            //
-            // `!emDescanso` porque o fim do DESCANSO nao e festa: quem terminou
-            // o intervalo nao cumpriu nada, so voltou.
-            .map { if (it.fimEm > 0L && it.restante == 0 && !it.emDescanso) it.fimEm else 0L }
-            .distinctUntilChanged()
-            .collect { fim ->
-                if (fim <= 0L) return@collect
+        fimDePomodoroPendente(prefs).collect { fim ->
+            if (fim <= 0L) return@collect
 
-                // Credita, comeca o descanso e remarca o alarme -- tudo o que o
-                // despertador faria se tivesse tocado. Chamar o mesmo caminho
-                // em vez de repetir os passos e o que impede os dois de
-                // discordarem.
-                Lembretes.tocou(app, Tipo.POMODORO)
+            // Credita, comeca o descanso e remarca o alarme -- tudo o que o
+            // despertador faria se tivesse tocado. Se ele JA tocou, isto nao
+            // faz nada: os carimbos de la seguram a segunda passada. Chamar o
+            // mesmo caminho em vez de repetir os passos e o que impede os dois
+            // de discordarem.
+            Lembretes.tocou(app, Tipo.POMODORO)
 
-                // Uma festa por pomodoro: sem o carimbo, reabrir o app com um
-                // pomodoro vencido soltaria confete de novo, toda vez.
-                if (prefs.pomodoroFestejado.first() == fim) return@collect
-                prefs.marcarPomodoroFestejado(fim)
-                if (!prefs.festaDoPomodoro.first()) return@collect
+            // Carimba antes de decidir sobre a festa, e nao depois: e ele que
+            // fecha o assunto daquele pomodoro, com festa ou sem. Sem isto o
+            // fluxo voltaria a apontar para o mesmo fim no segundo seguinte.
+            prefs.marcarPomodoroFestejado(fim)
 
-                festa = fim
-                tocarPalmas(app)
-            }
+            if (!prefs.festaDoPomodoro.first()) return@collect
+            if (!aindaValeFestejar(fim)) return@collect
+
+            festa = fim
+            tocarPalmas(app)
+        }
+    }
+
+    // O mesmo para os outros pomodoros, e num efeito separado de proposito: sao
+    // ate dez relogios, cada um com o proprio carimbo, e amarrar os dois num
+    // fluxo so faria o fim de um esconder o do outro.
+    LaunchedEffect(Unit) {
+        val app = contexto.applicationContext
+        val prefs = Preferencias(app)
+        fimDeSubPendente(prefs).collect { fim ->
+            if (fim <= 0L) return@collect
+
+            Lembretes.tocou(app, Tipo.SUBPOMODORO)
+
+            // Relido DEPOIS da entrega, porque ela mexeu na lista.
+            val lista = prefs.subsDoPomodoro.first()
+            val dono = lista.firstOrNull { it.fimEm == fim } ?: return@collect
+            prefs.salvarSubs(
+                lista.map { if (it.id == dono.id) it.copy(festejado = fim) else it },
+            )
+
+            if (!prefs.festaDoPomodoro.first()) return@collect
+            if (!aindaValeFestejar(fim)) return@collect
+
+            festa = fim
+            tocarPalmas(app)
+        }
     }
 
     val conexao = remember {
@@ -284,6 +302,18 @@ fun CascaApp(
     }
     }
 }
+
+/**
+ * Ate quando um fim de foco ainda merece confete e palmas.
+ *
+ * O fim e resolvido sempre -- creditado e com o descanso comecado -- mas a
+ * festa e para quem esta ali. Abrir o app meia hora depois e receber confete de
+ * algo que terminou no almoco nao comemora nada; assusta.
+ */
+private const val JANELA_DA_FESTA = 2 * 60 * 1000L
+
+private fun aindaValeFestejar(fim: Long): Boolean =
+    System.currentTimeMillis() - fim <= JANELA_DA_FESTA
 
 /** A partir daqui a lateral de 260 dp e um quarto da tela ou menos. */
 private val LARGURA_MINIMA_PARA_LATERAL = 720.dp

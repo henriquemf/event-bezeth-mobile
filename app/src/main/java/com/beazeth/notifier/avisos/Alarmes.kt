@@ -34,6 +34,14 @@ enum class Tipo(val acao: String, val codigo: Int) {
     AGUA("com.beazeth.notifier.AVISO_AGUA", 1),
     POMODORO("com.beazeth.notifier.AVISO_POMODORO", 2),
     EVENTO("com.beazeth.notifier.AVISO_EVENTO", 3),
+
+    /**
+     * Os ate dez sub-pomodoros, num alarme so -- o do PROXIMO a vencer, como na
+     * agenda. Quando ele toca, quem entrega olha todos e remarca para o
+     * seguinte. Dez alarmes exatos seriam dez entradas para manter em dia toda
+     * vez que alguem tocasse em qualquer cartao.
+     */
+    SUBPOMODORO("com.beazeth.notifier.AVISO_SUBPOMODORO", 4),
 }
 
 /**
