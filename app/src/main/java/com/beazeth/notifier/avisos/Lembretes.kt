@@ -106,8 +106,21 @@ object Lembretes {
     suspend fun mexeuNaAgua(context: Context) {
         val app = context.applicationContext
         Preferencias(app).marcarAgua(System.currentTimeMillis())
+        // Quem bebeu respondeu ao lembrete: ele sai da barra. Alem de ser o
+        // certo, e o que impede a barra de juntar avisos deste app -- e avisos
+        // juntos chegam mudos (ver `TEMPO_NA_BARRA`).
+        desavisar(app, idDoAviso("agua"))
         remarcarAgua(app)
     }
+
+    /**
+     * A configuracao do lembrete mudou: ligou, desligou, trocou o intervalo ou
+     * a janela.
+     *
+     * Irmao de [pomodoroMudou] e [subsMudaram], e pelo mesmo motivo: recalcular
+     * a agenda inteira a cada arrasto de slider seria trabalho a toa.
+     */
+    suspend fun aguaMudou(context: Context) = remarcarAgua(context.applicationContext)
 
     /**
      * Entrega o lembrete de agua se ele estiver vencido, e marca o proximo.
@@ -251,7 +264,13 @@ object Lembretes {
      * de uma interacao, e recalcular a agenda inteira -- que nao mudou -- a
      * cada aperto de botao seria trabalho a toa na thread de quem esta olhando.
      */
-    suspend fun pomodoroMudou(context: Context) = remarcarPomodoro(context.applicationContext)
+    suspend fun pomodoroMudou(context: Context) {
+        val app = context.applicationContext
+        // "Tempo, momo!" deixou de ser verdade no instante em que alguem tocou
+        // em Começar ou Zerar -- e um aviso vencido na barra cala o proximo.
+        desavisar(app, idDoAviso("pomodoro"))
+        remarcarPomodoro(app)
+    }
 
     /**
      * Algum dos outros pomodoros mudou: nasceu, começou, pausou, zerou, trocou
@@ -261,7 +280,13 @@ object Lembretes {
      * de uma interacao, e recalcular a agenda inteira a cada um seria trabalho
      * a toa na thread de quem esta olhando.
      */
-    suspend fun subsMudaram(context: Context) = remarcarSubs(context.applicationContext)
+    suspend fun subsMudaram(context: Context, idDoSub: String? = null) {
+        val app = context.applicationContext
+        // O id chega quando a mudanca foi num sub especifico; criar um novo nao
+        // tem aviso velho para tirar.
+        if (idDoSub != null) desavisar(app, idDoAviso("sub-" + idDoSub))
+        remarcarSubs(app)
+    }
 
     // ------------------------------------------------------------ pomodoro
 
@@ -297,7 +322,7 @@ object Lembretes {
                 som = somEscolhido(context),
                 id = idDoAviso("pomodoro"),
                 titulo = "Fim do descanso 🍎",
-                texto = "Se estiver pronta, comeca outro foco. Se nao, tudo bem tambem 💗",
+                texto = "Se estiver pronta, começa outro foco. Se não, tudo bem também 💗",
                 rota = Destino.POMODORO.rota,
             )
             return
@@ -402,14 +427,18 @@ object Lembretes {
             if (sub.descansoAte > 0L) {
                 if (agora < sub.descansoAte) return@mapIndexed sub
                 mudou = true
-                if (avisaveis && !Visibilidade.appNaFrente) {
+                // Sem a condicao de "app fechado" que o fim do FOCO tem: o fim
+                // do foco e anunciado por dentro com confete e palmas, e este
+                // nao e anunciado por nada. Calar aqui com o app aberto era
+                // deixar o descanso acabar em silencio absoluto.
+                if (avisaveis) {
                     avisar(
                         context = context,
                         canal = Canal.POMODORO,
                         som = som,
                         id = idDoAviso("sub-" + sub.id),
-                        titulo = "Fim do descanso — $nome",
-                        texto = "Se estiver pronta, comeca outro foco. Se nao, tudo bem tambem 💗",
+                        titulo = "Fim do descanso 🍎 — $nome",
+                        texto = "Se estiver pronta, começa outro foco. Se não, tudo bem também 💗",
                         rota = Destino.POMODORO.rota,
                     )
                 }

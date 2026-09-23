@@ -5,6 +5,7 @@ import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.local.AguaDiaEntity
 import com.beazeth.notifier.data.local.BancoLocal
 import com.beazeth.notifier.data.local.BlocoEntity
+import com.beazeth.notifier.data.local.ConfigAguaEntity
 import com.beazeth.notifier.data.local.DiarioEntity
 import com.beazeth.notifier.data.local.EventoEntity
 import com.beazeth.notifier.data.local.NotaEntity
@@ -14,6 +15,7 @@ import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonObject
@@ -40,6 +42,7 @@ class Repositorio(private val context: Context) {
 
     private val banco = BancoLocal.obter(context)
     private val guardaToken = TokenStore(context)
+    private val prefs = Preferencias(context)
 
     // ------------------------------------------------------------ leitura
 
@@ -333,6 +336,46 @@ class Repositorio(private val context: Context) {
             corpo = buildJsonObject {
                 put("delta", delta)
                 put("day", hoje)
+            },
+            entidade = ALVO_AGUA,
+        )
+    }
+
+    /**
+     * Liga, desliga e ajusta o lembrete de agua.
+     *
+     * **Ate a 1.7.1 isto nao existia, e o lembrete de agua simplesmente nunca
+     * avisava para quem so usa o celular.** A configuracao so chegava pela
+     * sincronizacao, e o padrao do banco do servidor e `enabled = FALSE` --
+     * entao, sem abrir o site num computador, nao havia como ligar. Sem conta
+     * nenhuma, nao havia como ligar de jeito nenhum.
+     *
+     * O marco anda ao LIGAR, e so entao: `proximoCopo` trata "sem marco" como
+     * vencido, e sem isto ligar o lembrete dispararia um "hora de beber agua"
+     * no mesmo segundo, em cima de quem acabou de mexer no ajuste. Mexer no
+     * intervalo depois nao empurra nada -- quem encurtou o intervalo quer o
+     * proximo mais cedo, e nao um intervalo novo inteiro a partir de agora.
+     */
+    suspend fun definirConfigDeAgua(nova: ConfigAguaEntity) {
+        val antes = banco.agua().observarConfig().first()
+        banco.agua().gravarConfig(nova)
+
+        if (nova.enabled && (antes?.enabled != true || prefs.aguaMarcoEm.first() <= 0L)) {
+            prefs.marcarAgua(System.currentTimeMillis())
+        }
+
+        Lembretes.aguaMudou(context)
+
+        enfileirar(
+            metodo = "PATCH",
+            caminho = "/api/hydration/settings",
+            corpo = buildJsonObject {
+                put("enabled", nova.enabled)
+                put("intervalMinutes", nova.intervalMinutes)
+                put("startTime", nova.startTime)
+                put("endTime", nova.endTime)
+                put("dailyGoal", nova.dailyGoal)
+                put("glassMl", nova.glassMl)
             },
             entidade = ALVO_AGUA,
         )

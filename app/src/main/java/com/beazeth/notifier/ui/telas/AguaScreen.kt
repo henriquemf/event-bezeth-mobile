@@ -33,6 +33,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.Repositorio
+import com.beazeth.notifier.data.local.ConfigAguaEntity
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
 import com.beazeth.notifier.ui.componentes.Copo
 import com.beazeth.notifier.ui.theme.Doce
@@ -77,6 +78,10 @@ class AguaViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     fun beber() = viewModelScope.launch { repo.beberAgua(1) }
+
+    /** Liga, desliga e ajusta o lembrete. Ver `CartaoDoLembrete`. */
+    fun salvarConfig(nova: ConfigAguaEntity) =
+        viewModelScope.launch { repo.definirConfigDeAgua(nova) }
 
     fun desfazer() = viewModelScope.launch { repo.beberAgua(-1) }
 }
@@ -159,6 +164,15 @@ fun AguaScreen(vm: AguaViewModel = viewModel()) {
             } else {
                 item { mostrador(Modifier.fillMaxWidth()) }
                 item { doDia(Modifier.fillMaxWidth()) }
+            }
+            // Entre o dia e o historico: e o ajuste do que a tela de cima
+            // faz, e vem antes do que ja passou.
+            item {
+                CartaoDoLembrete(
+                    config = config,
+                    aoMudar = vm::salvarConfig,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             item {
                 HistoricoDeAgua(

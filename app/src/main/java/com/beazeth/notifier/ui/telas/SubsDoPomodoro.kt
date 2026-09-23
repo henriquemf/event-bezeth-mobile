@@ -171,8 +171,9 @@ internal suspend fun criarSub(context: Context, prefs: Preferencias) {
 internal suspend fun removerSub(context: Context, prefs: Preferencias, id: String) {
     prefs.salvarSubs(prefs.subsDoPomodoro.first().filterNot { it.id == id })
     // Sem isto, o alarme marcado para o sub que acabou de sair continuaria de
-    // pe e acordaria o aparelho para nao encontrar nada.
-    Lembretes.subsMudaram(context)
+    // pe e acordaria o aparelho para nao encontrar nada -- e o aviso dele
+    // ficaria na barra falando de um cartao que nao existe mais.
+    Lembretes.subsMudaram(context, id)
 }
 
 /** Começar / Pausar / Pular descanso, conforme o que estiver acontecendo. */
@@ -216,7 +217,7 @@ internal suspend fun alternarSub(
             }
         }
     }
-    Lembretes.subsMudaram(context)
+    Lembretes.subsMudaram(context, id)
 }
 
 internal suspend fun zerarSub(
@@ -227,7 +228,7 @@ internal suspend fun zerarSub(
 ) {
     creditarSubsTerminados(prefs, banco)
     mexer(prefs, id) { it.copy(fimEm = 0L, descansoAte = 0L, restante = it.minutos * 60) }
-    Lembretes.subsMudaram(context)
+    Lembretes.subsMudaram(context, id)
 }
 
 internal suspend fun definirMinutosDoSub(
@@ -242,7 +243,7 @@ internal suspend fun definirMinutosDoSub(
     }
     // Trocar o tempo zera o instante do fim, entao o alarme que existia nao
     // corresponde mais a nada.
-    Lembretes.subsMudaram(context)
+    Lembretes.subsMudaram(context, id)
 }
 
 internal suspend fun renomearSub(prefs: Preferencias, id: String, nome: String) {

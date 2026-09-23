@@ -39,7 +39,7 @@ tem: a de perfil.
 | **Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
 | **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima). Com o app fechado, quem avisa é a barra de notificação. Abaixo, **até dez outros pomodoros**, cada um com nome, tempo e contagem próprios, em cartão aberto ou minimizado; com algum deles correndo, o item Pomodoro do menu ganha um número. |
-| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida no site — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
+| **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. **O lembrete liga-se e ajusta-se aqui** — interruptor, intervalo, janela do dia, meta e tamanho do copo — e o que se muda sobe para o site na próxima sincronização. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
 | **Diário** | O ano inteiro em quadradinhos, um por dia — doze colunas de mês, trinta e uma linhas. Tocar num dia abre uma folha por baixo com os seis humores e o espaço de escrever; a cor pinta o quadradinho e um ponto marca "tem texto aqui". O que se digita desce para o banco a cada pausa, então fechar a folha com um arrasto não perde nada. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
 | **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). Os avisos: quais existem, com que som (com botão de ouvir), e o que a tela bloqueada mostra. No fim, a sincronização e a saída da conta. |
@@ -184,6 +184,18 @@ de aparelho para aparelho e é desenhado para *chamar*; num app que avisa vária
 vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A água não
 vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido duplo
 padrão.
+
+**Aviso velho na barra cala o próximo.** Do Android 16 em diante o sistema junta
+os avisos de um mesmo app num pacote ("Event Beazeth · 3"), e o que entra no
+pacote nasce marcado como silencioso — basta um segundo aviso pendurado na barra
+para o par já ser empacotado. Como nada tirava os avisos de lá, bastava passar o
+dia com o app instalado para *tudo* virar silêncio, e o sintoma era "nenhuma
+notificação faz barulho" sem que houvesse nada errado com o som nem com o canal.
+
+A correção é não deixar aviso velho parado: cada um sai sozinho depois de meia
+hora (`setTimeoutAfter`) e sai na hora quando a pessoa resolve o assunto dentro
+do app — bebeu o copo, começou outro pomodoro. É o certo por si só (um lembrete é
+um instante, não um item de lista) e devolve o som de quebra.
 
 **Importância, som e vibração são copiados uma vez só, quando o canal nasce.**
 Depois disso o Android guarda a escolha da pessoa e ignora o código — e nem

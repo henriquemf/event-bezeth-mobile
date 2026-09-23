@@ -33,6 +33,7 @@ import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.first
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.Tipo
+import com.beazeth.notifier.avisos.Visibilidade
 import com.beazeth.notifier.avisos.tocarPalmas
 import com.beazeth.notifier.ui.componentes.BarraInferior
 import com.beazeth.notifier.ui.componentes.Confete
@@ -159,6 +160,12 @@ fun CascaApp(
 
             if (!prefs.festaDoPomodoro.first()) return@collect
             if (!aindaValeFestejar(fim)) return@collect
+            // A festa e de quem esta olhando. Com o app atras, quem anunciou
+            // foi a barra de notificacao, com o som dela -- e tocar as palmas
+            // aqui tambem sairia como dois sons por cima um do outro. (E, do
+            // Android 15 em diante, o sistema silencia audio de app em segundo
+            // plano de qualquer forma: seriam palmas mudas em cima do aviso.)
+            if (!Visibilidade.appNaFrente) return@collect
 
             festa = fim
             tocarPalmas(app)
@@ -185,6 +192,12 @@ fun CascaApp(
 
             if (!prefs.festaDoPomodoro.first()) return@collect
             if (!aindaValeFestejar(fim)) return@collect
+            // A festa e de quem esta olhando. Com o app atras, quem anunciou
+            // foi a barra de notificacao, com o som dela -- e tocar as palmas
+            // aqui tambem sairia como dois sons por cima um do outro. (E, do
+            // Android 15 em diante, o sistema silencia audio de app em segundo
+            // plano de qualquer forma: seriam palmas mudas em cima do aviso.)
+            if (!Visibilidade.appNaFrente) return@collect
 
             festa = fim
             tocarPalmas(app)

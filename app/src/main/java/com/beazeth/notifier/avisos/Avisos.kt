@@ -252,6 +252,37 @@ fun avisar(
 }
 
 /**
+ * Tira um aviso da barra.
+ *
+ * Existe porque **aviso velho na barra cala o proximo** -- ver
+ * [TEMPO_NA_BARRA]. Quando a pessoa resolve o assunto dentro do app (bebeu o
+ * copo, começou outro pomodoro), o aviso daquele assunto passou a descrever uma
+ * coisa que nao e mais verdade, e sair da barra e o certo mesmo sem o efeito
+ * colateral do som.
+ */
+fun desavisar(context: Context, id: Int) {
+    NotificationManagerCompat.from(context).cancel(id)
+}
+
+/**
+ * Quanto tempo um aviso fica na barra antes de sumir sozinho.
+ *
+ * **Isto nao e enfeite: sem ele os avisos deste app chegam MUDOS.** Do Android
+ * 16 em diante o sistema junta os avisos de um mesmo app num pacote ("Event
+ * Beazeth · 3"), e o que entra no pacote nasce com a marca de silencioso. Basta
+ * um segundo aviso na barra para o primeiro par ja ser empacotado -- e como
+ * nada aqui tirava os avisos de la, bastava passar o dia com o app instalado
+ * para tudo virar silencio. Foi assim, e nao por causa do som ou do canal, que
+ * "nenhuma notificacao faz barulho" apareceu.
+ *
+ * Meia hora tambem e o tempo certo pelo que o aviso E: um lembrete e um
+ * instante, nao um item de lista. Quem nao viu "hora de beber agua" em trinta
+ * minutos nao precisa ve-lo empilhado com o das 10, o das 11 e o das 12 -- e o
+ * proprio app mostra o estado a qualquer momento.
+ */
+private const val TEMPO_NA_BARRA = 30 * 60 * 1000L
+
+/**
  * O corpo comum de um aviso.
  *
  * Existe porque o aviso e a versao publica dele sao o MESMO cartao com outro
@@ -279,6 +310,7 @@ private fun montar(
         .setContentIntent(aoTocar(context, id, rota))
         .setVisibility(canal.visibilidade)
         .setAutoCancel(true)
+        .setTimeoutAfter(TEMPO_NA_BARRA)
 
 /** O que a tela bloqueada mostra no lugar de um evento, quando esconde. */
 private const val TITULO_GENERICO = "Lembrete da agenda 💗"
