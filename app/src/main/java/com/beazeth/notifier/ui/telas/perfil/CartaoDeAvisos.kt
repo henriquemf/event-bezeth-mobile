@@ -3,13 +3,7 @@ package com.beazeth.notifier.ui.telas.perfil
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,10 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -36,6 +28,7 @@ import com.beazeth.notifier.avisos.podeAvisar
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.LinhaComChave
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
 import com.beazeth.notifier.ui.theme.TipografiaBeazeth
@@ -137,7 +130,7 @@ internal fun CartaoDeAvisos() {
 
         for (canal in Canal.entries) {
             val marcado by prefs.avisoLigado(canal.base).collectAsStateWithLifecycle(true)
-            ChaveDeAviso(
+            LinhaComChave(
                 titulo = canal.titulo,
                 descricao = canal.descricao,
                 marcado = marcado,
@@ -158,9 +151,9 @@ internal fun CartaoDeAvisos() {
 
         val festa by prefs.festaDoPomodoro.collectAsStateWithLifecycle(true)
 
-        ChaveDeAviso(
+        LinhaComChave(
             titulo = "Confete e palmas",
-            descricao = "Quando o foco acaba e o descanso começa, com o app aberto.",
+            descricao = "Quando o foco acaba, com o app aberto.",
             marcado = festa,
             aoMudar = { novo -> escopo.launch { prefs.definirFestaDoPomodoro(novo) } },
         )
@@ -171,7 +164,7 @@ internal fun CartaoDeAvisos() {
         val mostrarNome by prefs.nomeDoEventoNaTelaBloqueada
             .collectAsStateWithLifecycle(true)
 
-        ChaveDeAviso(
+        LinhaComChave(
             titulo = "Mostrar o nome do evento",
             descricao = "Desligado, aparece só \"um compromisso seu\", sem dizer qual.",
             marcado = mostrarNome,
@@ -220,46 +213,6 @@ private fun Subtitulo(texto: String) {
         color = Doce.tintaSuave,
         modifier = Modifier.padding(top = Espaco.e2),
     )
-}
-
-@Composable
-private fun ChaveDeAviso(
-    titulo: String,
-    descricao: String,
-    marcado: Boolean,
-    aoMudar: (Boolean) -> Unit,
-) {
-    val cores = Doce
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = titulo,
-                style = TipografiaBeazeth.titleMedium,
-                color = cores.tinta,
-            )
-            Text(
-                text = descricao,
-                style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
-                color = cores.tintaSuave,
-            )
-        }
-        Switch(
-            checked = marcado,
-            onCheckedChange = aoMudar,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = cores.superficie,
-                checkedTrackColor = cores.destaque,
-                checkedBorderColor = cores.destaque,
-                uncheckedThumbColor = cores.tintaSuave,
-                uncheckedTrackColor = cores.fundoCampo,
-                uncheckedBorderColor = cores.traco,
-            ),
-        )
-    }
 }
 
 /**

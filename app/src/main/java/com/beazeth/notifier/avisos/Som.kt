@@ -23,21 +23,41 @@ import com.beazeth.notifier.R
  * O preco: quem tiver ajustado esse canal a mao nos ajustes do sistema perde o
  * ajuste ao trocar o som pelo app. E aceitavel porque foi a propria pessoa que
  * acabou de pedir a troca -- ninguem troca o toque esperando manter o toque.
+ *
+ * ## Por que as chaves mudaram na 1.8.0
+ *
+ * Ate ali os toques eram senos gerados por conta, e o arquivo de cada um foi
+ * trocado por uma gravacao. Trocar so o CONTEUDO do arquivo nao chegaria a quem
+ * ja instalou: o canal guarda o endereco do recurso pelo id NUMERICO, que o
+ * build pode renumerar, e o canal velho continuaria apontando para o que
+ * estivesse naquele numero. Chave nova e canal novo, com o endereco certo.
+ *
+ * Quem tinha escolhido um dos antigos nao volta ao padrao: [porChave] traduz a
+ * chave velha para o toque novo mais parecido (ver [ANTIGAS]).
+ *
+ * ## De onde vem cada toque
+ *
+ * Todos sao gravacoes CC0 (dominio publico) do Freesound, tratadas uma vez:
+ * silencio da frente cortado, grave abaixo de ~120 Hz tirado (o alto-falante
+ * do celular nao o reproduz e o devolve como zumbido), nada acima de 10 kHz e
+ * volume nivelado entre eles. A origem de cada um esta no README.
  */
 enum class Som(
     val chave: String,
     val nome: String,
     val descricao: String,
 ) {
-    SINO("sino", "Sino", "Duas notas, como um sininho de vidro."),
-    GOTA("gota", "Gotinha", "Curtíssimo e discreto. Quase ninguém ao redor percebe."),
-    HARPA("harpa", "Harpa", "Três notas subindo. O mais alegre dos três."),
+    KALIMBA("kalimba", "Kalimba", "Uma nota redonda e macia, que se apaga devagar."),
+    CAIXINHA("caixinha", "Caixinha de música", "Uma nota delicada de caixinha de música."),
+    SININHO("sininho", "Sininho", "Curtinho e claro, como um sininho de mesa."),
+    BOLHAS("bolhas", "Bolhinhas", "Bolhas de água subindo. Combina com o lembrete de beber."),
+    HARPA("harpinha", "Harpa", "Uma frase de harpa. O mais longo e o mais sonhador."),
 
     /**
      * O toque de notificacao do proprio aparelho.
      *
      * Fica na lista porque e o que muita gente espera, e porque quem trocar o
-     * som do sistema espera que o app acompanhe. E o mais alto dos cinco: o
+     * som do sistema espera que o app acompanhe. E o mais alto de todos: o
      * padrao do Android e desenhado para chamar.
      */
     SISTEMA("sistema", "Toque do aparelho", "O mesmo som das outras notificações."),
@@ -58,18 +78,23 @@ enum class Som(
     }
 
     private fun recurso(): Int = when (this) {
-        SINO -> R.raw.aviso_sino
-        GOTA -> R.raw.aviso_gota
-        HARPA -> R.raw.aviso_harpa
+        KALIMBA -> R.raw.aviso_kalimba
+        CAIXINHA -> R.raw.aviso_caixinha
+        SININHO -> R.raw.aviso_sininho
+        BOLHAS -> R.raw.aviso_bolhas
+        HARPA -> R.raw.aviso_harpinha
         // Os dois nao tem arquivo; `uri` os resolve antes de chegar aqui.
         SISTEMA, MUDO -> 0
     }
 
     companion object {
-        val PADRAO = SINO
+        val PADRAO = KALIMBA
+
+        /** Os toques de antes da 1.8.0, no toque novo mais parecido com cada um. */
+        private val ANTIGAS = mapOf("sino" to SININHO, "gota" to BOLHAS, "harpa" to HARPA)
 
         /** O som guardado, ou o padrao se a chave nao for reconhecida. */
         fun porChave(chave: String?): Som =
-            entries.firstOrNull { it.chave == chave } ?: PADRAO
+            entries.firstOrNull { it.chave == chave } ?: ANTIGAS[chave] ?: PADRAO
     }
 }

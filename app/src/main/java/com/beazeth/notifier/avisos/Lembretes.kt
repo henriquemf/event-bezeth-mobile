@@ -337,11 +337,14 @@ object Lembretes {
 
         val minutos = prefs.pomoMinutos.first()
 
-        // O descanso comeca sozinho: e a regra do pomodoro, e um botao "agora
-        // descansar" seria so um jeito de esquecer de aperta-lo. O contrario
-        // nao vale -- quando o descanso acaba, nada recomeca; voltar a focar e
-        // decisao de quem esta ali.
-        prefs.marcarDescansoAte(agora + descansoDe(minutos) * 60_000L)
+        // O descanso comeca sozinho -- a regra do pomodoro, e o padrao. Com
+        // `descansoAutomatico` desligado o foco termina parado em "Tempo!", e o
+        // resto daqui (credito, aviso) e igual: o foco acabou do mesmo jeito.
+        // O contrario nunca vale -- quando o descanso acaba, nada recomeca;
+        // voltar a focar e decisao de quem esta ali.
+        if (prefs.descansoAutomatico.first()) {
+            prefs.marcarDescansoAte(agora + descansoDe(minutos) * 60_000L)
+        }
 
         // Depois de creditar, e nao antes: o pomodoro entra na conta do perfil
         // mesmo com o aviso desligado. Uma coisa e nao querer ser interrompida;
@@ -419,6 +422,7 @@ object Lembretes {
         val banco = BancoLocal.obter(context)
         val avisaveis = ligado(context, Canal.POMODORO)
         val som = somEscolhido(context)
+        val descansar = prefs.descansoAutomatico.first()
         var mudou = false
 
         val novos = lista.mapIndexed { indice, sub ->
@@ -478,11 +482,12 @@ object Lembretes {
                 )
             }
 
-            // O descanso comeca sozinho, como no principal.
+            // O descanso comeca sozinho, como no principal -- e com o mesmo
+            // interruptor: desligado, o sub fica parado no fim do foco.
             sub.copy(
                 avisado = sub.fimEm,
                 creditado = sub.fimEm,
-                descansoAte = agora + descansoDe(sub.minutos) * 60_000L,
+                descansoAte = if (descansar) agora + descansoDe(sub.minutos) * 60_000L else 0L,
             )
         }
 

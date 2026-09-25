@@ -45,6 +45,7 @@ class Preferencias(private val context: Context) {
     private val chaveSubs = stringPreferencesKey("pomo_subs")
     private val chavePomoFestejado = longPreferencesKey("pomo_festejado")
     private val chaveFesta = booleanPreferencesKey("festa_do_pomodoro")
+    private val chaveDescansoAutomatico = booleanPreferencesKey("pomo_descanso_automatico")
     private val chaveAguaMarco = longPreferencesKey("agua_marco_em")
     private val chaveAguaProximo = longPreferencesKey("agua_proximo_em")
 
@@ -143,7 +144,7 @@ class Preferencias(private val context: Context) {
     /**
      * O toque escolhido, pela chave do enum `Som`.
      *
-     * Vazio quando ninguem escolheu ainda, e nao "sino": quem traduz chave em
+     * Vazio quando ninguem escolheu ainda, e nao "kalimba": quem traduz chave em
      * som e `Som.porChave`, que ja devolve o padrao para o que nao reconhece.
      * Repetir o nome do padrao aqui seria uma segunda verdade para desencontrar
      * da primeira no dia em que o padrao mudar.
@@ -195,11 +196,10 @@ class Preferencias(private val context: Context) {
     /**
      * Quando o descanso termina, ou zero se nao ha descanso correndo.
      *
-     * O descanso comeca sozinho quando o foco acaba -- essa e a regra do
-     * pomodoro, e um botao "agora descansar" seria so um jeito de esquecer de
-     * aperta-lo. Guardar o INSTANTE do fim, e nao os segundos restantes, e a
-     * mesma escolha de `pomoFimEm`: a conta e feita pelo relogio quando alguem
-     * olha, entao fechar o app nao desalinha nada.
+     * O descanso comeca sozinho quando o foco acaba, a menos que
+     * [descansoAutomatico] esteja desligado. Guardar o INSTANTE do fim, e nao
+     * os segundos restantes, e a mesma escolha de `pomoFimEm`: a conta e feita
+     * pelo relogio quando alguem olha, entao fechar o app nao desalinha nada.
      *
      * Voltar a zero e o que diz "o descanso acabou e ja foi anunciado" -- por
      * isso nao ha um carimbo separado para ele.
@@ -231,6 +231,26 @@ class Preferencias(private val context: Context) {
 
     suspend fun definirFestaDoPomodoro(ligada: Boolean) {
         context.prefsAparencia.edit { it[chaveFesta] = ligada }
+    }
+
+    /**
+     * Se o descanso comeca sozinho quando o foco acaba. Ligado de fabrica, que
+     * e a regra do pomodoro e como o app sempre foi.
+     *
+     * Desligado e para quem usa o timer fora do ciclo classico -- uma prova, um
+     * bloco de estudo emendado --: o foco termina parado em "Tempo!", com a
+     * festa de sempre, e o proximo passo e da pessoa.
+     *
+     * Vale para o principal e para os subs, como no site
+     * (`en_pomodoro_auto_descanso` em `core/pomodoro.js`): sao o mesmo relogio,
+     * e um sub que descansasse diferente seria "igual ao principal" so no nome.
+     * E lida no INSTANTE do fim, entao mudar no meio de um foco vale para ele.
+     */
+    val descansoAutomatico: Flow<Boolean> =
+        context.prefsAparencia.data.map { it[chaveDescansoAutomatico] ?: true }
+
+    suspend fun definirDescansoAutomatico(ligado: Boolean) {
+        context.prefsAparencia.edit { it[chaveDescansoAutomatico] = ligado }
     }
 
     /**

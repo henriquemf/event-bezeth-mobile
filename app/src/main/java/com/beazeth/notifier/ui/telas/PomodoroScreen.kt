@@ -39,6 +39,7 @@ import com.beazeth.notifier.data.segundosAte
 import com.beazeth.notifier.ui.componentes.Ampulheta
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.LinhaComChave
 import com.beazeth.notifier.ui.componentes.anelDoMostrador
 import com.beazeth.notifier.ui.componentes.janelaDeitada
 import com.beazeth.notifier.data.local.BancoLocal
@@ -306,6 +307,15 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
 
     fun zerar() = viewModelScope.launch { zerarPomodoro(contexto, prefs, banco) }
 
+    val descansoAutomatico = prefs.descansoAutomatico
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    /** Nao remarca alarme nenhum: o alarme do fim do foco e o mesmo com ou sem
+     *  descanso, e quem le a escolha e a entrega, no instante do fim. */
+    fun definirDescansoAutomatico(ligado: Boolean) = viewModelScope.launch {
+        prefs.definirDescansoAutomatico(ligado)
+    }
+
     /** Chamado quando a contagem chega a zero com a tela aberta. */
     fun creditar() = viewModelScope.launch { creditarPomodoroTerminado(prefs, banco) }
 
@@ -555,4 +565,20 @@ private fun ControlesDoTempo(
             color = cores.tintaSuave,
         )
     }
+
+    // Vale para este e para os subs de baixo: sao o mesmo relogio. Fica aqui,
+    // junto do botao, e nao no perfil, porque e uma escolha sobre ESTE ciclo --
+    // quem desliga para uma prova precisa achar a chave onde esta o timer.
+    val descansoAutomatico by vm.descansoAutomatico.collectAsState()
+    LinhaComChave(
+        titulo = "Descanso automático",
+        descricao = if (descansoAutomatico) {
+            "Quando o foco acaba, o descanso começa sozinho."
+        } else {
+            "O foco termina parado no fim, e o próximo passo é seu."
+        },
+        marcado = descansoAutomatico,
+        aoMudar = vm::definirDescansoAutomatico,
+        modifier = Modifier.padding(top = Espaco.e1),
+    )
 }

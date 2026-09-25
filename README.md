@@ -38,7 +38,7 @@ tem: a de perfil.
 | **Agenda** | Grade do mês no tamanho do site, com os eventos escritos dentro do dia (hora, título e o ponto da cor da tag) e os dias dos meses vizinhos em tom apagado. Ao lado, "Próximos eventos", que olha sempre de hoje para a frente. Tocar num dia acende a célula e já abre o formulário naquela data; tocar num evento abre ele; segurar um evento e largar em outro dia muda a data e preserva a hora. |
 | **Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
-| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima). Com o app fechado, quem avisa é a barra de notificação. Abaixo, **até dez outros pomodoros**, cada um com nome, tempo e contagem próprios, em cartão aberto ou minimizado; com algum deles correndo, o item Pomodoro do menu ganha um número. |
+| **Pomodoro** | Ampulheta animada e contagem que sobrevive ao app fechado — o que se guarda é o instante em que termina, não os segundos. Ao chegar ao fim do foco: confete caindo na tela, uma salva de palmas, e o descanso começa sozinho (5 min até 30 de foco, 10 até 59, 15 daí para cima) — a menos que a chave **Descanso automático**, embaixo dos botões, esteja desligada: aí o foco termina parado em "Tempo!", e vale também para os subs. Com o app fechado, quem avisa é a barra de notificação. Abaixo, **até dez outros pomodoros**, cada um com nome, tempo e contagem próprios, em cartão aberto ou minimizado; com algum deles correndo, o item Pomodoro do menu ganha um número. |
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. **O lembrete liga-se e ajusta-se aqui** — interruptor, intervalo, janela do dia, meta e tamanho do copo — e o que se muda sobe para o site na próxima sincronização. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
 | **Diário** | O ano inteiro em quadradinhos, um por dia — doze colunas de mês, trinta e uma linhas. Tocar num dia abre uma folha por baixo com os seis humores e o espaço de escrever; a cor pinta o quadradinho e um ponto marca "tem texto aqui". O que se digita desce para o banco a cada pausa, então fechar a folha com um arrasto não perde nada. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
@@ -178,12 +178,40 @@ o aviso toma a tela é a pessoa, canal por canal. Um canal só transformaria "o
 lembrete de água está me atrapalhando" em "desliguei os avisos do app" — e junto
 iria o fim do pomodoro.
 
-**O som é um arquivo do app** (`res/raw/aviso_*.wav`): sinos curtos, de ataque
-macio, gerados com pico entre 26% e 30% da escala. O toque padrão do sistema muda
-de aparelho para aparelho e é desenhado para *chamar*; num app que avisa várias
-vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A água não
-vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido duplo
-padrão.
+**O som é um arquivo do app** (`res/raw/aviso_*.ogg`). O toque padrão do sistema
+muda de aparelho para aparelho e é desenhado para *chamar*; num app que avisa
+várias vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A
+água não vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido
+duplo padrão.
+
+Até a 1.7.1 os toques eram senos gerados por conta, e as palmas, ruído
+sintético — 87% da energia delas acima de 6 kHz, que no alto-falante soava como
+fone quebrado. Da 1.8.0 em diante são gravações CC0 (domínio público) do
+Freesound:
+
+| Recurso | No app | Original |
+|---|---|---|
+| `aviso_kalimba` | **Kalimba**, o padrão | [Kalimba C1](https://freesound.org/s/536551/), dvdfu |
+| `aviso_caixinha` | Caixinha de música | [Music box note](https://freesound.org/s/218459/), thomasjaunism |
+| `aviso_sininho` | Sininho | [Chime Notification](https://freesound.org/s/380482/), Jofae |
+| `aviso_bolhas` | Bolhinhas | [Bubbling Water Notification](https://freesound.org/s/844241/), ATP2-kh |
+| `aviso_harpinha` | Harpa | [harp-motif2](https://freesound.org/s/563311/), DaVince21 |
+| `festa_palmas` | palmas do fim do foco | [Small applause](https://freesound.org/s/462362/), Breviceps |
+
+Todos foram tratados do mesmo jeito: silêncio da frente cortado, passa-alta
+entre 100 e 200 Hz (o alto-falante do celular não reproduz esse grave e o
+devolve como zumbido), nada acima de 10 kHz, fade de saída em cosseno e volume
+nivelado entre eles, com pico máximo de −3 dBFS. Kalimba, caixinha e palmas são
+os mesmos arquivos do site, então o mesmo aviso soa igual nos dois.
+
+Trocar os arquivos obrigou a trocar as **chaves** dos toques (`sino` →
+`sininho`, `gota` → `bolhas`, `harpa` → `harpinha`), e não por capricho: o canal
+guarda o endereço do som pelo id *numérico* do recurso, e o build renumera os
+recursos. Conferido no emulador, atualizando a 1.7.1 para a 1.8.0: o número que
+era da Gotinha passou a ser de outro arquivo — com a chave velha, o canal velho
+tocaria o som errado por acaso. Com chave nova, o canal novo nasce com o endereço
+certo e o velho é apagado; quem tinha escolhido um toque antigo cai no novo mais
+parecido (`Som.porChave`).
 
 **Aviso velho na barra cala o próximo.** Do Android 16 em diante o sistema junta
 os avisos de um mesmo app num pacote ("Event Beazeth · 3"), e o que entra no
@@ -217,7 +245,7 @@ Na tela de perfil, no cartão **Avisos**:
   continua acordando o aparelho e postando um aviso que ninguém vê); a daqui
   decide se o lembrete **existe** — desligada, o alarme é desmarcado e o aparelho
   para de ser acordado.
-- **O som**, entre três toques do app, o toque do aparelho e "sem som", com um
+- **O som**, entre cinco toques do app, o toque do aparelho e "sem som", com um
   botão **Ouvir** em cada. Ouvir antes de escolher não é enfeite: "Gotinha" não
   diz se o som é discreto ou irritante, e sem a prévia o único jeito de descobrir
   seria escolher e esperar o próximo lembrete — que, no caso da agenda, pode
@@ -433,7 +461,7 @@ app/src/main/java/com/beazeth/notifier/
 └── ui/
     ├── CascaApp.kt          lateral ou barra inferior, e a barra de cima
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
-    ├── componentes/         o que se repete: cartão, campo, botão, lateral, retrato
+    ├── componentes/         o que se repete: cartão, campo, botão, chave, lateral, retrato
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
     │                        (diario/ é a grade do ano, os humores e a folha;
     │                        SubsDoPomodoro.kt são os outros dez cronômetros)

@@ -38,10 +38,10 @@ import com.beazeth.notifier.R
  * desenhado para CHAMAR: ataque seco e volume cheio. Num app que avisa varias
  * vezes ao dia isso cansa, e cansar e o que faz alguem desligar tudo.
  *
- * Os toques em `res/raw/` sao sinos curtos, de ataque macio, gerados com pico
- * entre 26% e 30% da escala -- ou seja, nascem baixos, e nao so parecem baixos.
- * Sendo arquivos do app, soam igual em qualquer aparelho. Qual deles vale e
- * escolha de quem usa, na tela de perfil; ver [Som].
+ * Os toques em `res/raw/` sao gravacoes de instrumentos macios -- kalimba,
+ * caixinha de musica, harpa --, tratadas para nao chiar nem zumbir no
+ * alto-falante de um celular. Sendo arquivos do app, soam igual em qualquer
+ * aparelho. Qual deles vale e escolha de quem usa, na tela de perfil; ver [Som].
  *
  * ## O que esta escrito aqui vale SO NA CRIACAO do canal
  *
@@ -109,7 +109,7 @@ enum class Canal(
         // HIGH: quem pos um cronometro quer saber na hora, e este e o unico
         // aviso que a pessoa pediu explicitamente, minutos antes, apertando um
         // botao. HIGH e sobre APARECER na frente, nao sobre volume -- o som e o
-        // mesmo sino baixo dos outros.
+        // mesmo toque macio dos outros.
         importancia = NotificationManager.IMPORTANCE_HIGH,
         vibra = true,
         visibilidade = NotificationCompat.VISIBILITY_PUBLIC,

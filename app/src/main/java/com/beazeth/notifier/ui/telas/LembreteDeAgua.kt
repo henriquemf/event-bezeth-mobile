@@ -11,15 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.beazeth.notifier.data.local.ConfigAguaEntity
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.LinhaComChave
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
@@ -89,40 +87,16 @@ internal fun CartaoDoLembrete(
     val atual = config ?: CONFIG_DE_AGUA_PADRAO
 
     CartaoDaTela(modifier = modifier, titulo = "Lembrete") {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Lembrar de beber",
-                    style = TipografiaBeazeth.titleMedium,
-                    color = cores.tinta,
-                )
-                Text(
-                    text = if (atual.enabled) {
-                        "Chega na barra de notificação, com o app fechado."
-                    } else {
-                        "Desligado. Ligue para ser lembrada de beber água."
-                    },
-                    style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
-                    color = cores.tintaSuave,
-                )
-            }
-            Switch(
-                checked = atual.enabled,
-                onCheckedChange = { aoMudar(atual.copy(enabled = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = cores.superficie,
-                    checkedTrackColor = cores.destaque,
-                    checkedBorderColor = cores.destaque,
-                    uncheckedThumbColor = cores.tintaSuave,
-                    uncheckedTrackColor = cores.fundoCampo,
-                    uncheckedBorderColor = cores.traco,
-                ),
-            )
-        }
+        LinhaComChave(
+            titulo = "Lembrar de beber",
+            descricao = if (atual.enabled) {
+                "Chega na barra de notificação, com o app fechado."
+            } else {
+                "Desligado. Ligue para ser lembrada de beber água."
+            },
+            marcado = atual.enabled,
+            aoMudar = { aoMudar(atual.copy(enabled = it)) },
+        )
 
         // Desligado, o resto some: sao ajustes de uma coisa que nao esta
         // acontecendo, e mante-los na tela e convidar a mexer neles achando que
