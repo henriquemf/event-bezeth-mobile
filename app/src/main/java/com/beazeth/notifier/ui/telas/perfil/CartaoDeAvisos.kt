@@ -21,7 +21,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beazeth.notifier.avisos.Canal
 import com.beazeth.notifier.avisos.Lembretes
-import com.beazeth.notifier.avisos.Som
 import com.beazeth.notifier.avisos.alarmeExatoLiberado
 import com.beazeth.notifier.avisos.bateriaLiberada
 import com.beazeth.notifier.avisos.podeAvisar
@@ -83,8 +82,6 @@ internal fun CartaoDeAvisos() {
         onDispose { dono.lifecycle.removeObserver(observador) }
     }
 
-    val som by prefs.somDoAviso.collectAsStateWithLifecycle("")
-
     CartaoDaTela(titulo = "Avisos") {
         Linha(rotulo = "Lembretes", valor = if (ligados) "ligados" else "desligados")
 
@@ -128,11 +125,17 @@ internal fun CartaoDeAvisos() {
         // ------------------------------------------------------ o que avisa
         Subtitulo("O que avisar")
 
-        for (canal in Canal.entries) {
+        // Uma chave por ASSUNTO, e nao por canal: o fim do foco e o do descanso
+        // sao o mesmo cronometro, e uma chave para cada seria pedir duas vezes.
+        for (canal in Canal.entries.filter { it.assunto == it.base }) {
             val marcado by prefs.avisoLigado(canal.base).collectAsStateWithLifecycle(true)
             LinhaComChave(
-                titulo = canal.titulo,
-                descricao = canal.descricao,
+                titulo = if (canal == Canal.POMODORO) "Pomodoro" else canal.titulo,
+                descricao = if (canal == Canal.POMODORO) {
+                    "O fim do foco e o fim do descanso."
+                } else {
+                    canal.descricao
+                },
                 marcado = marcado,
                 aoMudar = { novo ->
                     escopo.launch {
@@ -152,8 +155,8 @@ internal fun CartaoDeAvisos() {
         val festa by prefs.festaDoPomodoro.collectAsStateWithLifecycle(true)
 
         LinhaComChave(
-            titulo = "Confete e palmas",
-            descricao = "Quando o foco acaba, com o app aberto.",
+            titulo = "Festa",
+            descricao = "Confete e o som da festa quando o foco acaba, com o app aberto.",
             marcado = festa,
             aoMudar = { novo -> escopo.launch { prefs.definirFestaDoPomodoro(novo) } },
         )
@@ -180,25 +183,14 @@ internal fun CartaoDeAvisos() {
             color = cores.tintaSuave,
         )
 
-        // ------------------------------------------------------------- o som
-        Subtitulo("Som")
+        // ----------------------------------------------------------- os sons
+        Subtitulo("Sons")
 
-        EscolhaDeSom(
-            escolhido = Som.porChave(som),
-            aoEscolher = { novo ->
-                escopo.launch {
-                    prefs.definirSomDoAviso(novo.chave)
-                    // Trocar o som TROCA O CANAL DE LUGAR (ver `Som`), entao o
-                    // canal novo precisa nascer agora -- senao o proximo aviso
-                    // sairia por um canal que ainda nao existe.
-                    Lembretes.rearmar(contexto)
-                }
-            },
-        )
+        SonsDosAvisos(prefs)
 
         Text(
-            text = "O toque escolhido vale para os três. Se quiser um som diferente " +
-                "em cada um, ou mudar a vibração, isso fica nos ajustes do Android.",
+            text = "Toque num aviso para escolher o som dele e ouvir cada opção. " +
+                "A vibração fica nos ajustes do Android.",
             style = TipografiaBeazeth.bodyMedium.copy(fontSize = 12.sp),
             color = cores.tintaSuave,
         )

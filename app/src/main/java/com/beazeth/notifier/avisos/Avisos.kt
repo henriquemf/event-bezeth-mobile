@@ -24,7 +24,7 @@ import com.beazeth.notifier.R
  * saiu daqui. Um aviso local acerta com o aparelho em modo aviao; um push
  * dependeria de rede justamente no minuto em que ela pode faltar.
  *
- * ## Tres canais, e nao um
+ * ## Quatro canais, e nao um
  *
  * A partir do Android 8 quem decide o volume, a vibracao e se o aviso aparece
  * na tela e a PESSOA, canal por canal, nos ajustes do sistema. Um canal so
@@ -32,16 +32,20 @@ import com.beazeth.notifier.R
  * avisos do app" -- e junto iria o fim do pomodoro. Separados, da para calar a
  * agua e continuar sendo avisado da prova de amanha.
  *
+ * E o SOM tambem e do canal: e por isso que o fim do descanso tem canal
+ * proprio, separado do fim do foco -- sem isso os dois teriam de tocar igual.
+ *
  * ## O som, e por que ele e um arquivo do app
  *
  * O toque padrao de notificacao muda de aparelho para aparelho e quase sempre e
  * desenhado para CHAMAR: ataque seco e volume cheio. Num app que avisa varias
  * vezes ao dia isso cansa, e cansar e o que faz alguem desligar tudo.
  *
- * Os toques em `res/raw/` sao gravacoes de instrumentos macios -- kalimba,
- * caixinha de musica, harpa --, tratadas para nao chiar nem zumbir no
+ * Os toques em `res/raw/` sao gravacoes de instrumentos macios -- marimba,
+ * vibrafone, glockenspiel --, tratadas para nao chiar nem zumbir no
  * alto-falante de um celular. Sendo arquivos do app, soam igual em qualquer
- * aparelho. Qual deles vale e escolha de quem usa, na tela de perfil; ver [Som].
+ * aparelho. Cada canal tem o seu, escolhido por quem usa na tela de perfil;
+ * ver [Som] e [somDoCanal].
  *
  * ## O que esta escrito aqui vale SO NA CRIACAO do canal
  *
@@ -81,7 +85,7 @@ import com.beazeth.notifier.R
 enum class Canal(
     /**
      * A raiz do id do canal. O id de verdade leva o som junto
-     * (`pomodoro_gota`) -- ver [idCom] e [Som].
+     * (`pomodoro_marimba`) -- ver [idCom] e [Som].
      */
     val base: String,
     val titulo: String,
@@ -89,6 +93,17 @@ enum class Canal(
     val importancia: Int,
     val vibra: Boolean,
     val visibilidade: Int,
+    /**
+     * O toque de fabrica. Um diferente para cada canal de proposito: da para
+     * saber o que chegou sem olhar para a tela.
+     */
+    val somPadrao: Som,
+    /**
+     * A chave de liga/desliga deste canal no perfil (`Preferencias.avisoLigado`).
+     * O fim do descanso responde a do pomodoro: e o mesmo cronometro, e uma
+     * chave a mais seria pedir duas vezes a mesma coisa.
+     */
+    val assunto: String = base,
 ) {
     AGUA(
         base = "agua",
@@ -101,18 +116,34 @@ enum class Canal(
         importancia = NotificationManager.IMPORTANCE_DEFAULT,
         vibra = false,
         visibilidade = NotificationCompat.VISIBILITY_PUBLIC,
+        somPadrao = Som.GOTINHA,
     ),
     POMODORO(
         base = "pomodoro",
-        titulo = "Pomodoro",
-        descricao = "Quando a contagem chega ao fim.",
+        titulo = "Fim do foco",
+        descricao = "Quando o foco acaba com o app fechado. Aberto, quem toca é a festa.",
         // HIGH: quem pos um cronometro quer saber na hora, e este e o unico
         // aviso que a pessoa pediu explicitamente, minutos antes, apertando um
-        // botao. HIGH e sobre APARECER na frente, nao sobre volume -- o som e o
-        // mesmo toque macio dos outros.
+        // botao. HIGH e sobre APARECER na frente, nao sobre volume.
         importancia = NotificationManager.IMPORTANCE_HIGH,
         vibra = true,
         visibilidade = NotificationCompat.VISIBILITY_PUBLIC,
+        somPadrao = Som.MARIMBA,
+    ),
+    /**
+     * Canal proprio, e nao o do foco, porque no Android o som e do CANAL: sem
+     * isto nao haveria como o fim do descanso tocar diferente do fim do foco --
+     * e sao dois recados opostos, "para" e "pode voltar".
+     */
+    DESCANSO(
+        base = "descanso",
+        titulo = "Fim do descanso",
+        descricao = "Quando o descanso acaba. Voltar a focar fica por sua conta.",
+        importancia = NotificationManager.IMPORTANCE_HIGH,
+        vibra = true,
+        visibilidade = NotificationCompat.VISIBILITY_PUBLIC,
+        somPadrao = Som.VIBRAFONE,
+        assunto = "pomodoro",
     ),
     EVENTOS(
         base = "eventos",
@@ -121,6 +152,7 @@ enum class Canal(
         importancia = NotificationManager.IMPORTANCE_HIGH,
         vibra = true,
         visibilidade = NotificationCompat.VISIBILITY_PRIVATE,
+        somPadrao = Som.SININHO,
     );
 
     /** O id do canal deste assunto com [som] tocando. Ver [Som]. */
@@ -158,42 +190,42 @@ internal fun idDoAviso(nome: String): Int = nome.hashCode()
  * aparece nos ajustes do sistema. Sem isto, quem fosse desligar so o lembrete
  * de agua nao encontraria a chave ate o primeiro aviso ter chegado.
  */
-fun garantirCanais(context: Context, som: Som) {
+fun garantirCanais(context: Context, sons: Map<Canal, Som>) {
+    for ((canal, som) in sons) garantirCanal(context, canal, som)
+}
+
+/** Um canal so, com [som] -- e sem os canais velhos do mesmo assunto. */
+fun garantirCanal(context: Context, canal: Canal, som: Som) {
     val gerente = context.getSystemService(NotificationManager::class.java) ?: return
-    val toque = som.uri(context)
     val comoTocar = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_NOTIFICATION)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
         .build()
+    val atual = canal.idCom(som)
 
-    val atuais = Canal.entries.map { it.idCom(som) }.toSet()
+    gerente.createNotificationChannel(
+        NotificationChannel(atual, canal.titulo, canal.importancia).apply {
+            description = canal.descricao
+            setSound(som.uri(context), comoTocar)
+            enableVibration(canal.vibra)
+            // Um toque so, curto. O padrao de um canal de importancia alta e um
+            // zumbido duplo e longo, que junto do som vira sobressalto -- e o
+            // alvo aqui e ser notado, nao assustar.
+            if (canal.vibra) vibrationPattern = longArrayOf(0, 120)
+        },
+    )
 
-    for (canal in Canal.entries) {
-        gerente.createNotificationChannel(
-            NotificationChannel(canal.idCom(som), canal.titulo, canal.importancia).apply {
-                description = canal.descricao
-                setSound(toque, comoTocar)
-                enableVibration(canal.vibra)
-                // Um toque so, curto. O padrao de um canal de importancia alta
-                // e um zumbido duplo e longo, que junto do som vira sobressalto
-                // -- e o alvo aqui e ser notado, nao assustar.
-                if (canal.vibra) vibrationPattern = longArrayOf(0, 120)
-            },
-        )
-    }
-
-    // Os canais do som ANTERIOR, que nao valem mais. Sem isto os ajustes do
-    // sistema encheriam de "Pomodoro" repetido, um por som ja experimentado, e
-    // nao haveria como saber qual esta valendo.
+    // Os canais do som ANTERIOR deste assunto, que nao valem mais. Sem isto os
+    // ajustes do sistema encheriam de "Fim do foco" repetido, um por som ja
+    // experimentado, e nao haveria como saber qual esta valendo.
     //
     // A comparacao aceita o id sem sufixo (`agua`) porque foi assim que os
     // canais nasceram na primeira versao dos avisos, antes de haver escolha de
-    // som -- quem instalou aquela tem tres canais orfaos para limpar.
+    // som -- quem instalou aquela tem canais orfaos para limpar. As raizes nao
+    // sao prefixo umas das outras, entao "descanso_" nunca pega "pomodoro_".
     for (existente in gerente.notificationChannels) {
-        val nosso = Canal.entries.any {
-            existente.id == it.base || existente.id.startsWith("${it.base}_")
-        }
-        if (nosso && existente.id !in atuais) gerente.deleteNotificationChannel(existente.id)
+        val desteAssunto = existente.id == canal.base || existente.id.startsWith("${canal.base}_")
+        if (desteAssunto && existente.id != atual) gerente.deleteNotificationChannel(existente.id)
     }
 }
 
@@ -230,7 +262,7 @@ fun avisar(
     visibilidade: Int = canal.visibilidade,
 ) {
     if (!podeAvisar(context)) return
-    garantirCanais(context, som)
+    garantirCanal(context, canal, som)
 
     val aviso = montar(context, canal, som, id, titulo, texto, rota)
         .setVisibility(visibilidade)

@@ -18,7 +18,7 @@
     release. Recurso que some e um modo de falha diferente do de classe que
     some, e precisa ser conferido no arquivo pronto:
 
-        unzip -l dist/EventBeazeth-x.y.z.apk | grep -c '\.ogg'
+        unzip -l dist/EventBeazeth-x.y.z.apk | grep -c '\.wav'
 
     (No release os nomes vem ofuscados, tipo `res/T-.ttf`, entao procure pela
     EXTENSAO e nao pelo nome.)
@@ -28,4 +28,4 @@
 -->
 <resources
     xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/aviso_kalimba,@raw/aviso_caixinha,@raw/aviso_sininho,@raw/aviso_bolhas,@raw/aviso_harpinha,@raw/festa_palmas" />
+    tools:keep="@raw/aviso_marimba,@raw/aviso_vibrafone,@raw/aviso_glockenspiel,@raw/aviso_gotinha,@raw/festa_marimba,@raw/festa_palmas" />

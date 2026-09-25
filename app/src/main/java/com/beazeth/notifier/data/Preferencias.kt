@@ -40,6 +40,7 @@ class Preferencias(private val context: Context) {
     private val chavePomoAvisado = longPreferencesKey("pomo_avisado")
     private val chaveAvisoDeEvento = longPreferencesKey("aviso_de_evento_ate")
     private val chaveSomDoAviso = stringPreferencesKey("som_do_aviso")
+    private val chaveSomDaFesta = stringPreferencesKey("som_da_festa")
     private val chaveNomeNaTelaBloqueada = booleanPreferencesKey("nome_na_tela_bloqueada")
     private val chavePomoDescansoAte = longPreferencesKey("pomo_descanso_ate")
     private val chaveSubs = stringPreferencesKey("pomo_subs")
@@ -142,18 +143,38 @@ class Preferencias(private val context: Context) {
     }
 
     /**
-     * O toque escolhido, pela chave do enum `Som`.
+     * O toque UNICO de antes da 1.9.0, quando os avisos todos tocavam o mesmo.
      *
-     * Vazio quando ninguem escolheu ainda, e nao "kalimba": quem traduz chave em
-     * som e `Som.porChave`, que ja devolve o padrao para o que nao reconhece.
-     * Repetir o nome do padrao aqui seria uma segunda verdade para desencontrar
-     * da primeira no dia em que o padrao mudar.
+     * So e lido, nunca mais escrito: quem tinha escolhido um toque continua com
+     * ele em todo canal que ainda nao ganhou escolha propria (ver
+     * `resolverSom`). Sem isto, atualizar o app trocaria o som de quem ja tinha
+     * decidido qual queria.
      */
     val somDoAviso: Flow<String> =
         context.prefsAparencia.data.map { it[chaveSomDoAviso] ?: "" }
 
-    suspend fun definirSomDoAviso(chave: String) {
-        context.prefsAparencia.edit { it[chaveSomDoAviso] = chave }
+    /**
+     * O toque de um canal, pela chave do enum `Som`. A chave de fora e o
+     * `Canal.base` -- "agua", "pomodoro", "descanso", "eventos".
+     *
+     * Vazio quando ninguem escolheu ainda, e nao o nome do padrao: quem traduz
+     * chave em som e `resolverSom`, que conhece o padrao de cada canal. Repeti-lo
+     * aqui seria uma segunda verdade para desencontrar da primeira no dia em que
+     * o padrao mudar.
+     */
+    fun somDoCanal(base: String): Flow<String> =
+        context.prefsAparencia.data.map { it[stringPreferencesKey("som_$base")] ?: "" }
+
+    suspend fun definirSomDoCanal(base: String, chave: String) {
+        context.prefsAparencia.edit { it[stringPreferencesKey("som_$base")] = chave }
+    }
+
+    /** O que toca junto do confete, pela chave de `SomDaFesta`. */
+    val somDaFesta: Flow<String> =
+        context.prefsAparencia.data.map { it[chaveSomDaFesta] ?: "" }
+
+    suspend fun definirSomDaFesta(chave: String) {
+        context.prefsAparencia.edit { it[chaveSomDaFesta] = chave }
     }
 
     /**

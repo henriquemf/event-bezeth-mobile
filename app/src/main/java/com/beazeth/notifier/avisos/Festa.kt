@@ -2,12 +2,14 @@ package com.beazeth.notifier.avisos
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
-import com.beazeth.notifier.R
+import com.beazeth.notifier.data.Preferencias
+import kotlinx.coroutines.flow.first
 
 /**
- * A salva de palmas do fim do foco, e o interruptor de "o app esta na frente".
+ * O som da festa do fim do foco, e o interruptor de "o app esta na frente".
  *
  * ## Por que o app precisa saber se esta visivel
  *
@@ -16,7 +18,7 @@ import com.beazeth.notifier.R
  * aberto sairia como dois sons ao mesmo tempo, um por cima do outro.
  *
  * Com este interruptor cada momento tem um dono: app fechado, quem avisa e a
- * barra de notificacao; app na frente, quem avisa e o confete com as palmas --
+ * barra de notificacao; app na frente, quem avisa e o confete com o som dele --
  * que e o que a pessoa esta olhando de qualquer forma.
  *
  * `@Volatile` porque quem escreve e a thread principal (a `MainActivity`) e
@@ -27,19 +29,27 @@ object Visibilidade {
     var appNaFrente: Boolean = false
 }
 
+/** Toca o som escolhido para a festa (ver [SomDaFesta]), agora. */
+internal suspend fun tocarFesta(context: Context) {
+    val som = SomDaFesta.porChave(Preferencias(context).somDaFesta.first())
+    som.uri(context)?.let { tocarUmaVez(context, it) }
+}
+
 /**
- * Toca as palmas, agora.
+ * Toca um som uma vez e devolve quem esta tocando, para poder parar.
  *
- * `RingtoneManager` e nao `MediaPlayer` pelo mesmo motivo da previa dos toques
- * em `EscolhaDeSom`: e o caminho curto para tocar um `res/raw` sem gerenciar
- * ciclo de vida de player nenhum -- ele se solta sozinho ao terminar.
+ * O mesmo caminho para a festa e para o botao "Ouvir" de cada toque: assim o
+ * que se ouve na previa e exatamente o que vai tocar depois, no mesmo volume.
  *
- * `USAGE_NOTIFICATION` de proposito: a festa sai no mesmo volume dos avisos do
- * app, e nao no de midia. Quem baixou o volume dos avisos porque esta numa
- * reuniao nao espera ser aplaudida a plenos pulmoes.
+ * `RingtoneManager` e nao `MediaPlayer`: e o caminho curto para tocar um
+ * `res/raw` sem gerenciar ciclo de vida de player nenhum -- ele se solta
+ * sozinho ao terminar.
+ *
+ * `USAGE_NOTIFICATION` de proposito: sai no volume dos avisos, e nao no de
+ * midia. Quem baixou o volume dos avisos porque esta numa reuniao nao espera
+ * ser aplaudida a plenos pulmoes.
  */
-internal fun tocarPalmas(context: Context) {
-    val uri = Uri.parse("android.resource://${context.packageName}/${R.raw.festa_palmas}")
+internal fun tocarUmaVez(context: Context, uri: Uri): Ringtone? =
     RingtoneManager.getRingtone(context.applicationContext, uri)?.apply {
         audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
@@ -47,7 +57,6 @@ internal fun tocarPalmas(context: Context) {
             .build()
         play()
     }
-}
 
 /**
  * Quanto dura o descanso que comeca sozinho quando o foco acaba.

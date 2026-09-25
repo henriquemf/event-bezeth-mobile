@@ -1,8 +1,6 @@
 package com.beazeth.notifier.ui.telas.perfil
 
-import android.media.AudioAttributes
 import android.media.Ringtone
-import android.media.RingtoneManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.beazeth.notifier.avisos.Som
+import com.beazeth.notifier.avisos.OpcaoDeSom
+import com.beazeth.notifier.avisos.tocarUmaVez
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
@@ -49,8 +48,9 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
  */
 @Composable
 internal fun EscolhaDeSom(
-    escolhido: Som,
-    aoEscolher: (Som) -> Unit,
+    opcoes: List<OpcaoDeSom>,
+    escolhida: OpcaoDeSom,
+    aoEscolher: (OpcaoDeSom) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contexto = LocalContext.current
@@ -62,28 +62,21 @@ internal fun EscolhaDeSom(
         onDispose { tocando?.stop() }
     }
 
-    fun ouvir(som: Som) {
+    fun ouvir(som: OpcaoDeSom) {
         // Parar o anterior antes: tocar dois de uma vez nao deixa julgar
         // nenhum dos dois.
         tocando?.stop()
-        val uri = som.uri(contexto) ?: return
-        tocando = RingtoneManager.getRingtone(contexto, uri)?.apply {
-            audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-            play()
-        }
+        tocando = som.uri(contexto)?.let { tocarUmaVez(contexto, it) }
     }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Espaco.e1),
     ) {
-        for (som in Som.entries) {
+        for (som in opcoes) {
             LinhaDeSom(
                 som = som,
-                ativo = som == escolhido,
+                ativo = som == escolhida,
                 aoTocar = { aoEscolher(som) },
                 aoOuvir = { ouvir(som) },
             )
@@ -93,7 +86,7 @@ internal fun EscolhaDeSom(
 
 @Composable
 private fun LinhaDeSom(
-    som: Som,
+    som: OpcaoDeSom,
     ativo: Boolean,
     aoTocar: () -> Unit,
     aoOuvir: () -> Unit,
@@ -129,7 +122,7 @@ private fun LinhaDeSom(
 
         // "Sem som" nao tem o que ouvir, e um botao que nao faz nada e pior do
         // que botao nenhum.
-        if (som != Som.MUDO) {
+        if (som.uri(LocalContext.current) != null) {
             Box(
                 modifier = Modifier
                     .clip(CircleShape)

@@ -173,45 +173,50 @@ então cada tipo diz quanto atraso ainda vale: uma hora para "agora" (um aviso d
 compromisso da manhã que chega à tarde não lembra nada) e doze horas para os
 antecipados de curso, onde "faltam 15 dias" continua verdade meio dia depois.
 
-**Três canais, e não um.** Do Android 8 em diante quem decide som, vibração e se
+**Quatro canais, e não um.** Do Android 8 em diante quem decide som, vibração e se
 o aviso toma a tela é a pessoa, canal por canal. Um canal só transformaria "o
 lembrete de água está me atrapalhando" em "desliguei os avisos do app" — e junto
-iria o fim do pomodoro.
+iria o fim do pomodoro. E o som também é do canal: é por isso que o **fim do
+descanso** tem canal próprio, separado do **fim do foco** — sem isso os dois
+teriam de tocar igual, e são recados opostos ("para" e "pode voltar"). O liga e
+desliga dos dois continua sendo uma chave só, a do Pomodoro (`Canal.assunto`).
 
-**O som é um arquivo do app** (`res/raw/aviso_*.ogg`). O toque padrão do sistema
-muda de aparelho para aparelho e é desenhado para *chamar*; num app que avisa
-várias vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A
-água não vibra, e os outros dois dão um pulso único de 120 ms em vez do zumbido
-duplo padrão.
+**O som é um arquivo do app** (`res/raw/*.wav`). O toque padrão do sistema muda
+de aparelho para aparelho e é desenhado para *chamar*; num app que avisa várias
+vezes ao dia, isso cansa — e cansar é o que faz alguém desligar tudo. A água não
+vibra, e os outros dão um pulso único de 120 ms em vez do zumbido duplo padrão.
 
-Até a 1.7.1 os toques eram senos gerados por conta, e as palmas, ruído
-sintético — 87% da energia delas acima de 6 kHz, que no alto-falante soava como
-fone quebrado. Da 1.8.0 em diante são gravações CC0 (domínio público) do
-Freesound:
+Até a 1.7.1 os toques eram senos gerados por conta, e as palmas, ruído sintético.
+A 1.8.0 trocou tudo por gravações do Freesound, e ainda chiava: eram prévias com
+compressão, e duas tinham ruído de sala audível. Da 1.9.0 em diante só entra
+fonte **sem perda** ou feita digitalmente:
 
 | Recurso | No app | Original |
 |---|---|---|
-| `aviso_kalimba` | **Kalimba**, o padrão | [Kalimba C1](https://freesound.org/s/536551/), dvdfu |
-| `aviso_caixinha` | Caixinha de música | [Music box note](https://freesound.org/s/218459/), thomasjaunism |
-| `aviso_sininho` | Sininho | [Chime Notification](https://freesound.org/s/380482/), Jofae |
-| `aviso_bolhas` | Bolhinhas | [Bubbling Water Notification](https://freesound.org/s/844241/), ATP2-kh |
-| `aviso_harpinha` | Harpa | [harp-motif2](https://freesound.org/s/563311/), DaVince21 |
-| `festa_palmas` | palmas do fim do foco | [Small applause](https://freesound.org/s/462362/), Breviceps |
+| `aviso_marimba` | Marimba — padrão do fim do foco | Marimba, baqueta de lã (C5, E5, G5), [Univ. de Iowa MIS](https://theremin.music.uiowa.edu/MIS.html) |
+| `aviso_vibrafone` | Vibrafone — padrão do fim do descanso | Vibrafone (E5, C5), Univ. de Iowa MIS |
+| `aviso_glockenspiel` | Sininho — padrão da agenda | Glockenspiel, baqueta de plástico (G6, C7), Univ. de Iowa MIS |
+| `aviso_gotinha` | Gotinha — padrão da água | `drop_002` e `drop_003` do [Interface Sounds](https://kenney.nl/assets/interface-sounds), Kenney (CC0) |
+| `festa_marimba` | Marimba em festa — padrão da festa | Marimba (C5, E5, G5, C6), Univ. de Iowa MIS |
+| `festa_palmas` | Palmas, opção da festa | [applause-2.wav](https://commons.wikimedia.org/wiki/File:277021_sandermotions_applause-2.wav), Sandermotions (CC0) |
 
-Todos foram tratados do mesmo jeito: silêncio da frente cortado, passa-alta
-entre 100 e 200 Hz (o alto-falante do celular não reproduz esse grave e o
-devolve como zumbido), nada acima de 10 kHz, fade de saída em cosseno e volume
-nivelado entre eles, com pico máximo de −3 dBFS. Kalimba, caixinha e palmas são
-os mesmos arquivos do site, então o mesmo aviso soa igual nos dois.
+As gravações da Iowa são de estúdio, em AIFF, e "podem ser usadas em qualquer
+projeto, sem restrições" (dito na própria página). As da Kenney são feitas
+digitalmente: sem microfone, não há ruído de sala. O tratamento é o mesmo do
+site (ver o README de lá): o chiado de cada gravação medido no silêncio antes
+da nota e subtraído do espectro, tudo 70 dB abaixo do pico virando zero digital
+exato, e WAV 16 bits a 48 kHz — a taxa nativa do mixer do Android, para o
+aparelho não reamostrar. Medido, o chiado dos sons musicais ficou entre −97 e
+−102 dBFS. As palmas não são mais o padrão: palmas *são* rajadas de ruído.
 
-Trocar os arquivos obrigou a trocar as **chaves** dos toques (`sino` →
-`sininho`, `gota` → `bolhas`, `harpa` → `harpinha`), e não por capricho: o canal
-guarda o endereço do som pelo id *numérico* do recurso, e o build renumera os
-recursos. Conferido no emulador, atualizando a 1.7.1 para a 1.8.0: o número que
-era da Gotinha passou a ser de outro arquivo — com a chave velha, o canal velho
-tocaria o som errado por acaso. Com chave nova, o canal novo nasce com o endereço
-certo e o velho é apagado; quem tinha escolhido um toque antigo cai no novo mais
-parecido (`Som.porChave`).
+**Chave nova a cada troca de arquivo.** O canal guarda o endereço do som pelo id
+*numérico* do recurso, e o build renumera os recursos quando a lista de arquivos
+muda. Conferido no emulador, atualizando a 1.7.1 para a 1.8.0: o número que era
+da Gotinha passou a ser de outro arquivo — com a chave velha, o canal velho
+tocaria o som errado por acaso. Por isso nenhuma chave de toque repete uma de
+versão anterior, e `Som.porChave` leva cada chave antiga ao toque novo mais
+parecido. Quem tinha escolhido o toque único de antes continua com ele em todo
+aviso que ainda não ganhou escolha própria (`resolverSom`).
 
 **Aviso velho na barra cala o próximo.** Do Android 16 em diante o sistema junta
 os avisos de um mesmo app num pacote ("Event Beazeth · 3"), e o que entra no
@@ -231,7 +236,7 @@ apagar e recriar resolve, porque ele lembra dos ajustes de um canal apagado e os
 restaura quando um canal com o *mesmo id* reaparece.
 
 É por isso que trocar o toque pelo app **troca o canal de lugar**: o id carrega a
-escolha (`pomodoro_gota` é outro canal que `pomodoro_sino`), o novo nasce e o
+escolha (`pomodoro_marimba` é outro canal que `pomodoro_gotinha`), o novo nasce e o
 velho é apagado. Quem já tiver ajustado aquele canal à mão nos ajustes do sistema
 perde o ajuste — aceitável, porque foi a própria pessoa que acabou de pedir a
 troca.
@@ -245,11 +250,14 @@ Na tela de perfil, no cartão **Avisos**:
   continua acordando o aparelho e postando um aviso que ninguém vê); a daqui
   decide se o lembrete **existe** — desligada, o alarme é desmarcado e o aparelho
   para de ser acordado.
-- **O som**, entre cinco toques do app, o toque do aparelho e "sem som", com um
-  botão **Ouvir** em cada. Ouvir antes de escolher não é enfeite: "Gotinha" não
-  diz se o som é discreto ou irritante, e sem a prévia o único jeito de descobrir
-  seria escolher e esperar o próximo lembrete — que, no caso da agenda, pode
-  levar dias.
+- **O som de cada aviso**, um por um: beber água, fim do foco, fim do
+  descanso, agenda e a festa do fim do foco (que toca com o app aberto). Cada
+  linha fechada mostra o som atual; tocar nela abre as opções — quatro toques
+  do app, o toque do aparelho e "sem som" —, com um botão **Ouvir** em cada.
+  Ouvir antes de escolher não é enfeite: "Gotinha" não diz se o som é discreto
+  ou irritante, e sem a prévia o único jeito de descobrir seria escolher e
+  esperar o próximo lembrete — que, no caso da agenda, pode levar dias. O
+  "Ouvir" toca pelo mesmo caminho e no mesmo volume do aviso de verdade.
 - **Se o nome do evento aparece na tela bloqueada.**
 
 ### A tela bloqueada
@@ -449,12 +457,12 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── SubPomodoro.kt       os outros dez pomodoros: o registro, o relógio e o disco
 │   └── local/               Room: entidades, DAOs e o banco
 ├── avisos/
-│   ├── Avisos.kt            os três canais, a visibilidade e o ato de postar
-│   ├── Som.kt               os toques, e por que trocar de som troca o canal de lugar
+│   ├── Avisos.kt            os quatro canais, a visibilidade e o ato de postar
+│   ├── Som.kt               os toques, o som de cada canal, e por que trocar de som troca o canal de lugar
 │   ├── Alarmes.kt           o AlarmManager: um alarme por assunto, sempre o próximo
 │   ├── Lembretes.kt         quem decide o que avisar e quando tocar de novo
 │   ├── Agua.kt              o próximo copo: um intervalo depois do último, dentro da janela
-│   ├── Festa.kt            as palmas do fim do foco, e quanto dura o descanso
+│   ├── Festa.kt             o som da festa do fim do foco, e quanto dura o descanso
 │   ├── Eventos.kt           os gatilhos da agenda, com as regras do site
 │   └── Receptores.kt        o alarme tocou / o aparelho religou
 ├── sync/SyncWorker.kt       quem roda a sincronização, e quando

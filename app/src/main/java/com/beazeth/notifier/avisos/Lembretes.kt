@@ -58,7 +58,7 @@ object Lembretes {
      */
     suspend fun rearmar(context: Context) {
         val app = context.applicationContext
-        garantirCanais(app, somEscolhido(app))
+        garantirCanais(app, sonsDosCanais(app))
         resolverAgenda(app)
         remarcarAgua(app)
         remarcarPomodoro(app)
@@ -68,7 +68,7 @@ object Lembretes {
     /** O alarme de [tipo] tocou. */
     suspend fun tocou(context: Context, tipo: Tipo) {
         val app = context.applicationContext
-        garantirCanais(app, somEscolhido(app))
+        garantirCanais(app, sonsDosCanais(app))
         when (tipo) {
             // A agua tambem: quem decide se "venceu" e a propria conta do
             // proximo copo, entao entregar e remarcar sao um passo so.
@@ -162,7 +162,7 @@ object Lembretes {
                 avisar(
                     context = context,
                     canal = Canal.AGUA,
-                    som = somEscolhido(context),
+                    som = somDoCanal(context, Canal.AGUA),
                     id = idDoAviso("agua"),
                     titulo = TITULO_DA_AGUA,
                     texto = TEXTO_DA_AGUA,
@@ -206,7 +206,7 @@ object Lembretes {
         val marca = prefs.avisoDeEventoAte.first()
         // Lidos uma vez, e nao dentro do laco: varios eventos podem vencer na
         // mesma passada, e cada leitura e uma ida ao disco.
-        val som = somEscolhido(context)
+        val som = somDoCanal(context, Canal.EVENTOS)
         val mostrarNome = prefs.nomeDoEventoNaTelaBloqueada.first()
 
         var ultimoVencido = 0L
@@ -315,11 +315,11 @@ object Lembretes {
         if (descansoAte > 0L) {
             if (agora < descansoAte) return
             prefs.marcarDescansoAte(0L)
-            if (!ligado(context, Canal.POMODORO)) return
+            if (!ligado(context, Canal.DESCANSO)) return
             avisar(
                 context = context,
-                canal = Canal.POMODORO,
-                som = somEscolhido(context),
+                canal = Canal.DESCANSO,
+                som = somDoCanal(context, Canal.DESCANSO),
                 id = idDoAviso("pomodoro"),
                 titulo = "Fim do descanso 🍎",
                 texto = "Se estiver pronta, começa outro foco. Se não, tudo bem também 💗",
@@ -359,7 +359,7 @@ object Lembretes {
         avisar(
             context = context,
             canal = Canal.POMODORO,
-            som = somEscolhido(context),
+            som = somDoCanal(context, Canal.POMODORO),
             id = idDoAviso("pomodoro"),
             titulo = "Tempo, momo! 🍎",
             // O caso de um minuto nao e hipotese: e o menor tempo que o slider
@@ -421,7 +421,9 @@ object Lembretes {
         val agora = System.currentTimeMillis()
         val banco = BancoLocal.obter(context)
         val avisaveis = ligado(context, Canal.POMODORO)
-        val som = somEscolhido(context)
+        // Lidos uma vez para a lista toda: sao ate dez subs na mesma passada.
+        val somDoFoco = somDoCanal(context, Canal.POMODORO)
+        val somDoDescanso = somDoCanal(context, Canal.DESCANSO)
         val descansar = prefs.descansoAutomatico.first()
         var mudou = false
 
@@ -438,8 +440,8 @@ object Lembretes {
                 if (avisaveis) {
                     avisar(
                         context = context,
-                        canal = Canal.POMODORO,
-                        som = som,
+                        canal = Canal.DESCANSO,
+                        som = somDoDescanso,
                         id = idDoAviso("sub-" + sub.id),
                         titulo = "Fim do descanso 🍎 — $nome",
                         texto = "Se estiver pronta, começa outro foco. Se não, tudo bem também 💗",
@@ -470,7 +472,7 @@ object Lembretes {
                 avisar(
                     context = context,
                     canal = Canal.POMODORO,
-                    som = som,
+                    som = somDoFoco,
                     id = idDoAviso("sub-" + sub.id),
                     titulo = "Tempo, momo! 🍎 — $nome",
                     texto = if (sub.minutos == 1) {
@@ -517,13 +519,12 @@ object Lembretes {
 
     // ------------------------------------------------------------ escolhas
 
-    /** Este assunto avisa? Ver `Preferencias.avisoLigado`. */
+    /**
+     * Este assunto avisa? Ver `Preferencias.avisoLigado`. Pelo [Canal.assunto],
+     * e nao pelo canal: o fim do descanso responde a chave do pomodoro.
+     */
     private suspend fun ligado(context: Context, canal: Canal): Boolean =
-        Preferencias(context).avisoLigado(canal.base).first()
-
-    /** O toque escolhido. */
-    private suspend fun somEscolhido(context: Context): Som =
-        Som.porChave(Preferencias(context).somDoAviso.first())
+        Preferencias(context).avisoLigado(canal.assunto).first()
 }
 
 /**

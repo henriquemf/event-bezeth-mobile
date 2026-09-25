@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.first
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.Tipo
 import com.beazeth.notifier.avisos.Visibilidade
-import com.beazeth.notifier.avisos.tocarPalmas
+import com.beazeth.notifier.avisos.tocarFesta
 import com.beazeth.notifier.ui.componentes.BarraInferior
 import com.beazeth.notifier.ui.componentes.Confete
 import com.beazeth.notifier.ui.componentes.BarraLateral
@@ -161,14 +161,14 @@ fun CascaApp(
             if (!prefs.festaDoPomodoro.first()) return@collect
             if (!aindaValeFestejar(fim)) return@collect
             // A festa e de quem esta olhando. Com o app atras, quem anunciou
-            // foi a barra de notificacao, com o som dela -- e tocar as palmas
+            // foi a barra de notificacao, com o som dela -- e tocar a festa
             // aqui tambem sairia como dois sons por cima um do outro. (E, do
             // Android 15 em diante, o sistema silencia audio de app em segundo
-            // plano de qualquer forma: seriam palmas mudas em cima do aviso.)
+            // plano de qualquer forma: seria uma festa muda em cima do aviso.)
             if (!Visibilidade.appNaFrente) return@collect
 
             festa = fim
-            tocarPalmas(app)
+            tocarFesta(app)
         }
     }
 
@@ -193,14 +193,14 @@ fun CascaApp(
             if (!prefs.festaDoPomodoro.first()) return@collect
             if (!aindaValeFestejar(fim)) return@collect
             // A festa e de quem esta olhando. Com o app atras, quem anunciou
-            // foi a barra de notificacao, com o som dela -- e tocar as palmas
+            // foi a barra de notificacao, com o som dela -- e tocar a festa
             // aqui tambem sairia como dois sons por cima um do outro. (E, do
             // Android 15 em diante, o sistema silencia audio de app em segundo
-            // plano de qualquer forma: seriam palmas mudas em cima do aviso.)
+            // plano de qualquer forma: seria uma festa muda em cima do aviso.)
             if (!Visibilidade.appNaFrente) return@collect
 
             festa = fim
-            tocarPalmas(app)
+            tocarFesta(app)
         }
     }
 
@@ -317,7 +317,7 @@ fun CascaApp(
 }
 
 /**
- * Ate quando um fim de foco ainda merece confete e palmas.
+ * Ate quando um fim de foco ainda merece confete e festa.
  *
  * O fim e resolvido sempre -- creditado e com o descanso comecado -- mas a
  * festa e para quem esta ali. Abrir o app meia hora depois e receber confete de
