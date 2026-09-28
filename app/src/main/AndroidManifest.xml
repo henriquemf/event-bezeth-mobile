@@ -89,6 +89,24 @@
             </intent-filter>
         </activity>
 
+        <!-- O post-it em picture-in-picture. Numa tarefa propria
+             (`taskAffinity`), para o app continuar inteiro por baixo da
+             janelinha, e `singleTask` porque o sistema so mostra um PiP por
+             vez: outro post-it troca o desta janela. `configChanges` porque
+             entrar e sair do PiP muda o tamanho da janela, e recriar a
+             activity a cada vez a tiraria do PiP. Ver `PostitFlutuante`. -->
+        <activity
+            android:name=".ui.flutuante.PostitFlutuante"
+            android:exported="false"
+            android:label="Post-it"
+            android:taskAffinity="com.beazeth.notifier.flutuante"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:theme="@style/Theme.Beazeth" />
+
         <!-- Quem recebe os alarmes. `exported="false"`: so este app marca
              alarmes para ele, e um `Intent` de fora nao tem por que fazer o app
              recalcular a agenda. -->

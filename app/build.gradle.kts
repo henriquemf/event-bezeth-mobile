@@ -29,8 +29,8 @@ android {
         // aparece nos ajustes, e e para gente ler.
         //
         // `empacotar.ps1 -Versao x.y.z` mexe nos dois de uma vez.
-        versionCode = 15
-        versionName = "1.9.0"
+        versionCode = 16
+        versionName = "1.10.0"
     }
 
     // ------------------------------------------------------------ assinatura

@@ -37,6 +37,10 @@ interface NotaDao {
     @Query("SELECT * FROM notas WHERE id = :id")
     suspend fun buscar(id: Long): NotaEntity?
 
+    /** Um post-it so, ao vivo: e o que a janela flutuante mostra. */
+    @Query("SELECT * FROM notas WHERE id = :id")
+    fun observarUma(id: Long): Flow<NotaEntity?>
+
     @Query("DELETE FROM notas WHERE id = :id")
     suspend fun apagar(id: Long)
 

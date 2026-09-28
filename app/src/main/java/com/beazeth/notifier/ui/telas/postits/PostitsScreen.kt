@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +50,7 @@ import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.data.Sincronizador
 import com.beazeth.notifier.ui.componentes.BotaoPilula
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.flutuante.PostitFlutuante
 import com.beazeth.notifier.ui.theme.Canto
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
@@ -78,6 +80,8 @@ fun PostitsScreen(vm: PostitsViewModel = viewModel()) {
     val notas by vm.notas.collectAsState()
     val cores = Doce
     val densidade = LocalDensity.current
+    val contexto = LocalContext.current
+    val temPip = remember { PostitFlutuante.disponivel(contexto) }
 
     var novo by remember { mutableStateOf("") }
     var corEscolhida by remember { mutableStateOf(CORES.first().first) }
@@ -245,6 +249,18 @@ fun PostitsScreen(vm: PostitsViewModel = viewModel()) {
                             aoRecolorir = { vm.recolorir(nota, it) },
                             aoMover = { x, y -> vm.mover(nota, x, y) },
                             aoApagar = { vm.apagar(nota) },
+                            aoFlutuar = if (temPip) {
+                                {
+                                    // Fecha a edicao antes: quem volta ao app
+                                    // encontra o quadro, e nao um papel aberto
+                                    // esperando teclado.
+                                    gerenteDeFoco.clearFocus()
+                                    editandoId = null
+                                    PostitFlutuante.abrir(contexto, nota.id)
+                                }
+                            } else {
+                                null
+                            },
                         )
                     }
                 }

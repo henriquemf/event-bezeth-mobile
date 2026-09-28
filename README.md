@@ -34,7 +34,7 @@ tem: a de perfil.
 
 | Tela | O que dá para fazer |
 | --- | --- |
-| **Post-its** | Quadro de verdade, não lista: cada papel tem posição, inclinação e cor. Quatro quadros (Hoje, Amanhã, Semana, Ideias), arrastar para mover, segurar para trocar a cor, e um botão Organizar que enfileira tudo. |
+| **Post-its** | Quadro de verdade, não lista: cada papel tem posição, inclinação e cor. Quatro quadros (Hoje, Amanhã, Semana, Ideias), arrastar para mover, segurar para trocar a cor, e um botão Organizar que enfileira tudo. Selecionar um trecho do texto abre a barra de formatação — negrito, itálico, sublinhado, riscado e link —, e **Flutuar ⧉** põe o post-it numa janela de picture-in-picture, por cima de qualquer app. |
 | **Agenda** | Grade do mês no tamanho do site, com os eventos escritos dentro do dia (hora, título e o ponto da cor da tag) e os dias dos meses vizinhos em tom apagado. Ao lado, "Próximos eventos", que olha sempre de hoje para a frente. Tocar num dia acende a célula e já abre o formulário naquela data; tocar num evento abre ele; segurar um evento e largar em outro dia muda a data e preserva a hora. |
 | **Planner** | A semana inteira em colunas, com régua de horas, blocos em escala de tempo, sobreposição repartindo a coluna e a linha do "agora". Segurar e arrastar move o bloco, encaixando em 15 minutos — só o arraste encaixa; horário escolhido à mão vale como escolhido, no relógio ou digitado. Marcar vários dias cria um bloco em cada. |
 | **To-do** | Uma semana por vez, com o contador de feitas. Criar, marcar, editar e apagar. |
@@ -312,6 +312,41 @@ Agora a tela olha a linha de *hoje* pela data local — que ainda não existe qu
 o dia começa, e por isso mostra zero —, e `POST /api/hydration/drink` leva `day`.
 O servidor aceita ontem, hoje ou amanhã em relação a ele e ignora o resto.
 
+**O texto do post-it é formatado, e fala a mesma língua do site.** O conteúdo é
+um HTML mínimo — seis marcas, `<b> <i> <u> <s> <a href> <br>` — lido de forma
+tolerante (o que não é marca é texto, então os post-its antigos aparecem iguais,
+sem migração) e escrito de forma canônica. `data/TextoRico.kt` é a terceira
+cópia da gramática que o servidor (`app/texto_rico.py`) e o site
+(`js/pages/notes/rich.js`) usam, e as três escrevem a mesma string para o mesmo
+texto: conferido com 4004 entradas sorteadas, zero diferenças. Sem isso, cada
+sincronização acharia uma "mudança" em todo post-it formatado.
+
+Por dentro, o campo do Compose só conhece texto puro e cursor, então a
+formatação mora ao lado, como intervalos ("negrito de 18 a 21"), e a cada tecla
+`TextoRico.ajustar` empurra os intervalos para onde o texto foi. Escrever logo
+depois de um trecho em negrito continua em negrito, como em todo editor; logo
+depois de um link, não — senão o resto da frase iria junto para o endereço.
+
+**A barra de formatação entra no lugar do menu de seleção do sistema.** Ao
+selecionar, o Compose pede ao `TextToolbar` que mostre copiar e colar; o
+`BarraDeFormato` é esse `TextToolbar`, e mostra B, I, U, S e link junto com os
+mesmos recortar, copiar, colar e selecionar tudo. Um menu só, e não dois
+disputando o espaço em cima da seleção. O link abre um diálogo (a barra não tem
+foco, e um campo sem foco não recebe teclado); fora da edição, tocar no link
+abre o navegador, e tocar no resto do papel abre a edição como sempre.
+
+**O post-it flutuante é uma activity própria, numa tarefa própria.** O
+picture-in-picture do Android é da *activity*: se fosse a `MainActivity`, o app
+inteiro viraria a janelinha. `PostitFlutuante` vive noutra tarefa
+(`taskAffinity`), então o papel flutua por cima de qualquer app e o Event
+Beazeth continua inteiro por baixo. Janela de PiP não recebe toque nem teclado,
+por isso ela só mostra — lendo o post-it do Room ao vivo: uma edição no app, ou
+vinda do site pela sincronização, aparece na janelinha sozinha. Ampliar abre o
+app no quadro de post-its; o X fecha. E ela acompanha a troca de id provisório
+por definitivo (`Remapeamentos`), senão um post-it recém-criado mostraria
+"apagado" um segundo depois de flutuar. O botão só aparece em aparelho que tem
+picture-in-picture.
+
 **Fabricantes seguram alarmes.** Samsung, Xiaomi e outros põem por cima do Doze
 um gerenciador próprio que, depois de dias sem o app ser aberto, para de
 entregar os alarmes dele — e o sintoma é "os lembretes só chegam quando eu mexo
@@ -455,6 +490,7 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Estatisticas.kt      as contas da tela de perfil, todas saindo do Room
 │   ├── Preferencias.kt      tema, fonte, modo escuro, estado do pomodoro e as marcas d'água dos avisos
 │   ├── SubPomodoro.kt       os outros dez pomodoros: o registro, o relógio e o disco
+│   ├── TextoRico.kt         o texto formatado dos post-its: a gramática do site e as marcas por intervalo
 │   └── local/               Room: entidades, DAOs e o banco
 ├── avisos/
 │   ├── Avisos.kt            os quatro canais, a visibilidade e o ato de postar
@@ -469,14 +505,16 @@ app/src/main/java/com/beazeth/notifier/
 └── ui/
     ├── CascaApp.kt          lateral ou barra inferior, e a barra de cima
     ├── SessaoViewModel.kt   entrar, criar conta, usar sem conta, sair
+    ├── flutuante/           o post-it em picture-in-picture
     ├── componentes/         o que se repete: cartão, campo, botão, chave, lateral, retrato
     ├── telas/               uma pasta por tela grande, um arquivo por assunto
     │                        (diario/ é a grade do ano, os humores e a folha;
-    │                        SubsDoPomodoro.kt são os outros dez cronômetros)
+    │                        SubsDoPomodoro.kt são os outros dez cronômetros;
+    │                        postits/EditorRico.kt é o campo formatado e a barra)
     └── theme/               tokens, paletas, fontes e tipografia
 ```
 
-São 74 arquivos Kotlin, ~17,9 mil linhas. O limite é **700 linhas**: quando um
+São 80 arquivos Kotlin, ~19,8 mil linhas. O limite é **700 linhas**: quando um
 chega perto, ele se divide por assunto (foi assim que `postits/`, `planner/` e
 `calendario/` viraram pastas, e por isso `avisos/` nasceu com seis arquivos em
 vez de um). Hoje só `data/Repositorio.kt` passou disso, com 731 — está na fila

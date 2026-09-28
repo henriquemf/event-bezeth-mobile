@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.beazeth.notifier.data.Repositorio
+import com.beazeth.notifier.data.TextoRico
 import com.beazeth.notifier.data.local.NotaEntity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +49,9 @@ class PostitsViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun criar(texto: String, cor: String, larguraVisivel: Int) = viewModelScope.launch {
         val (x, y) = vagaLivre(notas.value, larguraVisivel)
-        repo.criarNota(_quadro.value, texto, cor, x = x, y = y)
+        // O campo do topo e texto puro: vira HTML canonico ja na entrada, para
+        // "a < b" nao chegar ao banco como se fosse o comeco de uma marca.
+        repo.criarNota(_quadro.value, TextoRico.dePuro(texto).paraHtml(), cor, x = x, y = y)
     }
 
     fun editar(nota: NotaEntity, texto: String) = viewModelScope.launch {

@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -36,15 +36,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -56,6 +56,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import com.beazeth.notifier.data.Repositorio
+import com.beazeth.notifier.data.lerTextoRico
 import com.beazeth.notifier.data.local.NotaEntity
 import com.beazeth.notifier.ui.LocalModoLocal
 import com.beazeth.notifier.ui.theme.Canto
@@ -160,6 +161,8 @@ internal fun Postit(
     aoRecolorir: (String) -> Unit,
     aoMover: (Int, Int) -> Unit,
     aoApagar: () -> Unit,
+    /** `null` quando o aparelho nao tem picture-in-picture: o botao nem aparece. */
+    aoFlutuar: (() -> Unit)?,
 ) {
     val tom = tomDe(nota.color)
     val densidade = LocalDensity.current
@@ -167,22 +170,26 @@ internal fun Postit(
     val gerenteDeFoco = LocalFocusManager.current
     val foco = remember { FocusRequester() }
 
-    // `TextFieldValue` e nao `String` porque aqui a POSICAO DO CURSOR importa:
-    // quando o id provisorio vira definitivo, este cartao e recriado do zero, e
-    // um campo de texto recem-nascido comeca com o cursor no inicio. O efeito
-    // era escrever "MEIODAFRASE", a nota trocar de id, e a continuacao entrar de
-    // tras para a frente -- "-FORAMEIODAFRASE". Guardando o intervalo junto do
-    // texto, retomar uma edicao poe o cursor onde ela parou: no fim.
-    var campo by remember(nota.id) {
-        mutableStateOf(TextFieldValue(nota.content, TextRange(nota.content.length)))
-    }
-    val texto = campo.text
+    // O texto e a formatacao, juntos -- ver `EditorRico`. Guarda o cursor com o
+    // texto porque aqui a POSICAO DO CURSOR importa: quando o id provisorio vira
+    // definitivo, este cartao e recriado do zero, e um campo recem-nascido
+    // comeca com o cursor no inicio. O efeito era escrever "MEIODAFRASE", a nota
+    // trocar de id, e a continuacao entrar de tras para a frente --
+    // "-FORAMEIODAFRASE". Retomar uma edicao poe o cursor onde ela parou: no fim.
+    val editor = rememberEditorRico(nota.id, nota.content)
+    // O que se grava e o HTML CANONICO (`TextoRico.paraHtml`), e e ele que se
+    // compara: o mesmo texto formatado sai sempre como a mesma string.
+    val texto = editor.html
     var menuDeCor by remember(nota.id) { mutableStateOf(false) }
+    val barra = remember(nota.id) { BarraDeFormato() }
+    var linkPedido by remember(nota.id) { mutableStateOf<TextRange?>(null) }
 
     // A ultima versao que foi para a fila de envio. Sem isto, o rascunho abaixo
     // faria `nota.content` alcancar `texto` antes de fechar, e a comparacao de
-    // fechamento nunca acharia nada para mandar.
-    var naFila by remember(nota.id) { mutableStateOf(nota.content) }
+    // fechamento nunca acharia nada para mandar. Canonica desde o inicio: um
+    // post-it antigo, de texto cru, nao pode parecer "editado" so por ter sido
+    // aberto.
+    var naFila by remember(nota.id) { mutableStateOf(lerTextoRico(nota.content).paraHtml()) }
 
     // Abrir leva o teclado junto; fechar grava. Os tres caminhos de saida
     // (tocar fora, tocar em outro post-it, tocar em "Pronto") sao um so daqui
@@ -202,9 +209,15 @@ internal fun Postit(
     // de quem esta escrevendo perderia a frase e ainda jogaria o cursor para o
     // fim. Era esta a chave que faltava sair do `remember` acima.
     LaunchedEffect(nota.id, nota.content) {
-        if (!editando && nota.content != texto) {
-            campo = TextFieldValue(nota.content, TextRange(nota.content.length))
+        if (!editando && lerTextoRico(nota.content).paraHtml() != texto) {
+            editor.carregar(nota.content)
         }
+    }
+
+    // Voltando do dialogo de link, o foco volta para o papel: sem isto o
+    // teclado some e a pessoa tem de tocar de novo no texto para continuar.
+    LaunchedEffect(linkPedido) {
+        if (linkPedido == null && editando) runCatching { foco.requestFocus() }
     }
 
     // Enquanto se escreve, o texto desce sozinho: ao Room quase de imediato, a
@@ -324,18 +337,26 @@ internal fun Postit(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (editando) {
-                BasicTextField(
-                    value = campo,
-                    onValueChange = { campo = it },
-                    textStyle = TipografiaBeazeth.bodyLarge.copy(
-                        color = TINTA_DO_PAPEL,
-                        fontSize = 15.sp,
-                    ),
-                    cursorBrush = SolidColor(TINTA_DO_PAPEL),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .focusRequester(foco),
+                // A barra de formatacao ENTRA NO LUGAR do menu de selecao do
+                // sistema -- ver `BarraDeFormato`.
+                CompositionLocalProvider(LocalTextToolbar provides barra) {
+                    CampoRico(
+                        editor = editor,
+                        corDaTinta = TINTA_DO_PAPEL,
+                        corDoLink = COR_DO_LINK,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .focusRequester(foco),
+                    )
+                }
+                BarraFlutuante(
+                    barra = barra,
+                    editor = editor,
+                    aoPedirLink = {
+                        linkPedido = editor.intervaloSelecionado()
+                        barra.hide()
+                    },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -349,11 +370,30 @@ internal fun Postit(
                         aoFecharEdicao()
                     }
                     AcaoDoPostit(texto = "Apagar", cor = Color(0xFF7A3A3A), aoTocar = aoApagar)
+                    if (aoFlutuar != null) {
+                        // Grava antes de sair: o papel flutuante mostra o que
+                        // esta no banco, e o que foi digitado agora ainda pode
+                        // estar so aqui.
+                        AcaoDoPostit(texto = "Flutuar ⧉", cor = TINTA_DO_PAPEL) {
+                            if (texto != naFila) {
+                                aoEditar(texto)
+                                naFila = texto
+                            }
+                            aoFlutuar()
+                        }
+                    }
                 }
             } else {
+                val lido = remember(nota.content) { lerTextoRico(nota.content) }
                 Text(
-                    text = nota.content.ifBlank { "Toque para escrever…" },
-                    color = if (nota.content.isBlank()) {
+                    // Fora da edicao o link e de verdade: tocar nele abre. O
+                    // resto do papel continua abrindo a edicao, como antes.
+                    text = if (lido.texto.isBlank()) {
+                        AnnotatedString("Toque para escrever…")
+                    } else {
+                        lido.anotado(COR_DO_LINK, comLinks = true)
+                    },
+                    color = if (lido.texto.isBlank()) {
                         TINTA_DO_PAPEL.copy(alpha = 0.53f)
                     } else {
                         TINTA_DO_PAPEL
@@ -389,6 +429,17 @@ internal fun Postit(
                     )
                 }
             }
+        }
+
+        linkPedido?.let { intervalo ->
+            DialogoDeLink(
+                atual = editor.rico.linkEm(intervalo.min),
+                aoAplicar = { url ->
+                    editor.porLink(intervalo, url)
+                    linkPedido = null
+                },
+                aoFechar = { linkPedido = null },
+            )
         }
 
         if (menuDeCor) {

@@ -39,6 +39,10 @@ internal val CORES = listOf(
  *  todos claros, e a tinta da paleta sumiria em alguns deles. */
 internal val TINTA_DO_PAPEL = Color(0xFF3A2A12)
 
+/** O link no papel. Fixo pelo mesmo motivo da tinta: tem de se ler nas seis
+ *  cores de papel, e o destaque do tema nao garante isso. */
+internal val COR_DO_LINK = Color(0xFF9A2C66)
+
 /**
  * Quanto tempo parado, escrevendo, antes de o texto descer.
  *
