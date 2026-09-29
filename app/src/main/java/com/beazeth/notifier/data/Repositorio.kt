@@ -98,6 +98,9 @@ class Repositorio(private val context: Context) {
     /** Quantas escritas ainda nao subiram. A casca mostra isto. */
     fun pendencias(): Flow<Int> = banco.pendencias().quantas()
 
+    /** Desde quando o servidor recusa por erro dele, ou `null`. */
+    fun servidorFalhandoDesde(): Flow<Long?> = banco.pendencias().servidorFalhandoDesde()
+
     // ------------------------------------------------------------ post-its
 
     suspend fun criarNota(
@@ -224,7 +227,7 @@ class Repositorio(private val context: Context) {
         // Linha que nunca subiu nao precisa de DELETE la: o servidor nao a
         // conhece. Basta tirar da fila o que ainda falava dela.
         if (id < 0) {
-            removerPendenciasDe(id)
+            removerPendenciasDe(Sincronizador.ALVO_NOTAS, id)
             return
         }
         enfileirar(
@@ -290,7 +293,7 @@ class Repositorio(private val context: Context) {
     suspend fun apagarTarefa(id: Long) {
         banco.tarefas().apagar(id)
         if (id < 0) {
-            removerPendenciasDe(id)
+            removerPendenciasDe(Sincronizador.ALVO_TAREFAS, id)
             return
         }
         enfileirar(
@@ -510,7 +513,7 @@ class Repositorio(private val context: Context) {
         // evento que nunca chegou ao servidor, e ele tambem some da agenda.
         avisosDaAgendaMudaram()
         if (id < 0) {
-            removerPendenciasDe(id)
+            removerPendenciasDe(Sincronizador.ALVO_EVENTOS, id)
             return
         }
         enfileirar(
@@ -561,7 +564,7 @@ class Repositorio(private val context: Context) {
     suspend fun apagarBloco(id: Long) {
         banco.blocos().apagar(id)
         if (id < 0) {
-            removerPendenciasDe(id)
+            removerPendenciasDe(Sincronizador.ALVO_BLOCOS, id)
             return
         }
         enfileirar(
@@ -727,10 +730,15 @@ class Repositorio(private val context: Context) {
      *
      * Criar um post-it offline e apaga-lo antes de sincronizar deixaria um POST
      * na fila que criaria a nota de volta -- e sem nada depois para apaga-la.
+     *
+     * Filtra pela [entidade], como `PendenciasDao.trocarId`: cada tabela conta
+     * os provisorios por conta propria, e sem o filtro apagar o post-it -1
+     * levava junto a criacao da tarefa -1, que nunca chegava ao servidor.
      */
-    private suspend fun removerPendenciasDe(idProvisorio: Long) {
+    private suspend fun removerPendenciasDe(entidade: String, idProvisorio: Long) {
         val alvo = idProvisorio.toString()
         banco.pendencias().todas()
+            .filter { it.entidade == entidade }
             .filter { it.idProvisorio == idProvisorio || it.caminho.endsWith("/$alvo") }
             .forEach { banco.pendencias().remover(it) }
     }

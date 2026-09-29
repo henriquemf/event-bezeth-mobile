@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
         PomodoroEntity::class,
         DiarioEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class BancoLocal : RoomDatabase() {
@@ -91,6 +91,19 @@ abstract class BancoLocal : RoomDatabase() {
             }
         }
 
+        /**
+         * A fila ganha `falhandoDesde`, o instante do primeiro erro do servidor.
+         *
+         * So acrescenta uma coluna que aceita nulo, e nulo e exatamente o que
+         * toda pendencia ja enfileirada deve ter. Nenhuma linha e tocada: a fila
+         * que esta no aparelho atravessa intacta.
+         */
+        private val DE_3_PARA_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pendencias` ADD COLUMN `falhandoDesde` INTEGER")
+            }
+        }
+
         @Volatile
         private var instancia: BancoLocal? = null
 
@@ -108,7 +121,7 @@ abstract class BancoLocal : RoomDatabase() {
                     context.applicationContext,
                     BancoLocal::class.java,
                     "beazeth.db",
-                ).addMigrations(DE_1_PARA_2, DE_2_PARA_3).build().also { instancia = it }
+                ).addMigrations(DE_1_PARA_2, DE_2_PARA_3, DE_3_PARA_4).build().also { instancia = it }
             }
 
         /**

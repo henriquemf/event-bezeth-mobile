@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nada do app sai do aparelho, nem pela nuvem nem de celular para celular.
+
+     `allowBackup="false"` no manifesto so vale ate o Android 11. Do 12 em
+     diante ele desliga o backup na nuvem mas NAO a transferencia de um
+     aparelho para outro na configuracao do celular novo, e por ela iriam o
+     banco com o diario e os post-its, e a sessao. O celular novo pede login e
+     a primeira sincronizacao traz tudo de volta: nao ha o que perder. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

@@ -12,13 +12,22 @@ import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** O que a tela de login precisa saber para se desenhar. */
 data class EstadoLogin(
     val carregando: Boolean = false,
     val erro: String? = null,
+    /** Pedido de confirmacao: entrar descartaria alteracoes de outra conta. */
+    val descarte: Descarte? = null,
 )
+
+/**
+ * Ha [alteracoes] escritas da conta [emailAnterior] que nao subiram ainda, e a
+ * conta que esta entrando e outra.
+ */
+data class Descarte(val alteracoes: Int, val emailAnterior: String?)
 
 /** Em qual das situações o app está ao abrir. */
 sealed interface Sessao {
@@ -57,6 +66,9 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _login = MutableStateFlow(EstadoLogin())
     val login: StateFlow<EstadoLogin> = _login.asStateFlow()
+
+    /** O login que espera a pessoa decidir sobre o [Descarte]. Em memoria so. */
+    private var entradaEmEspera: Pair<String, Api.Conta>? = null
 
     init {
         restaurar()
@@ -97,13 +109,19 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
             // Nome e e-mail podem ter mudado no site, ou em outro aparelho,
             // desde o ultimo login.
             is Api.Resultado.Ok -> r.corpo.user?.let { conta ->
-                guardaToken.guardarConta(conta.nome, conta.email)
+                guardaToken.guardarConta(conta.nome, conta.email, conta.id)
                 _sessao.value = Sessao.Dentro(conta.nome, conta.email)
             }
 
+            // O token caiu -- venceu, ou a senha foi trocada noutro aparelho.
+            // Os dados do aparelho FICAM, porque podem ter escrita na fila que
+            // ainda nao subiu; quem decide o destino deles e o proximo login
+            // (ver `concluirEntrada`). O worker para: sem token ele so bateria
+            // num 401 de hora em hora.
             is Api.Resultado.Erro ->
                 if (r.semSessao) {
-                    guardaToken.limpar()
+                    SyncWorker.parar(getApplication())
+                    guardaToken.sessaoCaiu()
                     _sessao.value = Sessao.Fora
                 }
         }
@@ -119,7 +137,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
                 if (token == null || conta == null) {
                     _login.value = EstadoLogin(erro = "Resposta incompleta do servidor.")
                 } else {
-                    concluirEntrada(token, conta.nome, conta.email)
+                    concluirEntrada(token, conta)
                 }
             }
             is Api.Resultado.Erro -> _login.value = EstadoLogin(erro = r.mensagem)
@@ -136,7 +154,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
                 if (token == null || conta == null) {
                     _login.value = EstadoLogin(erro = "Resposta incompleta do servidor.")
                 } else {
-                    concluirEntrada(token, conta.nome, conta.email)
+                    concluirEntrada(token, conta)
                 }
             }
             is Api.Resultado.Erro -> _login.value = EstadoLogin(erro = r.mensagem)
@@ -150,15 +168,49 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
      * armadilha.** `guardar` apaga a marca do modo local; so DEPOIS disso a fila
      * de envio volta a aceitar escritas, e por isso a adocao vem em seguida e
      * nao antes -- `Repositorio.enfileirar` ignoraria tudo em silencio.
+     *
+     * **Dado de outra conta sai antes de a nova entrar.** Quando a sessao cai
+     * (token vencido, senha trocada noutro lugar), o banco do aparelho fica,
+     * com a fila de escritas dentro. Se quem entra agora e outra pessoa, ela
+     * veria o diario e os post-its da anterior -- e a fila, drenada com o token
+     * NOVO, gravaria as escritas da anterior na conta dela, para sempre. Se e a
+     * mesma pessoa, nada sai: a fila sobe e nenhuma escrita offline se perde.
+     *
+     * **E nada sai sem perguntar.** O que ja subiu esta salvo no servidor, na
+     * conta anterior, e apagar a copia do aparelho nao perde nada. O que ainda
+     * esta na fila so existe aqui: com escrita pendente, a entrada para e a tela
+     * pede confirmacao ([Descarte], desenhado por `DialogoDePendentes`) -- o
+     * caminho que nao perde nada e entrar antes com a conta anterior, para a
+     * fila subir.
      */
-    private suspend fun concluirEntrada(token: String, nome: String, email: String) {
+    private suspend fun concluirEntrada(token: String, conta: Api.Conta, descarteConfirmado: Boolean = false) {
+        val dono = guardaToken.contaDosDados()
+        val emailDono = guardaToken.emailDosDados()
+        val deOutraConta = if (dono != null) {
+            dono != conta.id
+        } else {
+            emailDono != null && !emailDono.equals(conta.email, ignoreCase = true)
+        }
+        if (deOutraConta && !descarteConfirmado) {
+            val pendentes = BancoLocal.obter(getApplication()).pendencias().quantas().first()
+            if (pendentes > 0) {
+                entradaEmEspera = token to conta
+                _login.value = EstadoLogin(descarte = Descarte(pendentes, emailDono))
+                return
+            }
+        }
+        if (deOutraConta) {
+            SyncWorker.parar(getApplication())
+            BancoLocal.limpar(getApplication())
+            Perfil(getApplication()).removerFoto()
+        }
         val vinhaDoModoLocal = guardaToken.modoLocalAtivo()
-        guardaToken.guardar(token, nome, email)
+        guardaToken.guardar(token, conta.nome, conta.email, conta.id)
         if (vinhaDoModoLocal) {
             Repositorio(getApplication()).adotarDadosLocais()
         }
         _login.value = EstadoLogin()
-        _sessao.value = Sessao.Dentro(nome, email)
+        _sessao.value = Sessao.Dentro(conta.nome, conta.email)
     }
 
     /**
@@ -170,6 +222,19 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun contaMudou(nome: String, email: String) {
         _sessao.value = Sessao.Dentro(nome, email)
+    }
+
+    /** A pessoa leu o aviso e decidiu descartar as alteracoes da outra conta. */
+    fun confirmarDescarte() = viewModelScope.launch {
+        val (token, conta) = entradaEmEspera ?: return@launch
+        entradaEmEspera = null
+        concluirEntrada(token, conta, descarteConfirmado = true)
+    }
+
+    /** Voltou atras: nada e apagado, e o token da conta nova e esquecido. */
+    fun cancelarDescarte() {
+        entradaEmEspera = null
+        _login.value = EstadoLogin()
     }
 
     /** Limpa o erro ao trocar entre entrar e criar conta: a mensagem da tela

@@ -70,6 +70,16 @@ class Sincronizador(private val context: Context) {
         val token = guardaToken.tokenAtual() ?: return@withLock Fim.SemSessao
 
         val subida = drenarFila(token)
+        if (subida is Fim.SemSessao) {
+            // A senha pode ter sido trocada NESTE aparelho no meio da drenagem:
+            // o token que ela levava caiu, e o novo ja esta guardado. Uma volta
+            // com ele, e so uma -- se o novo tambem cair, a sessao caiu mesmo.
+            val novo = guardaToken.tokenAtual()
+            if (novo == null || novo == token) return@withLock subida
+            val deNovo = drenarFila(novo)
+            if (deNovo !is Fim.Ok) return@withLock deNovo
+            return@withLock baixarMudancas(novo)
+        }
         if (subida !is Fim.Ok) return@withLock subida
 
         baixarMudancas(token)
@@ -106,9 +116,7 @@ class Sincronizador(private val context: Context) {
 
                 is Api.Resultado.Erro -> {
                     if (r.semSessao) return Fim.SemSessao
-                    if (r.mensagem.startsWith(PREFIXO_REDE_FORA)) {
-                        return Fim.Adiado(r.mensagem)
-                    }
+                    if (passageiro(r, p)) return Fim.Adiado(r.mensagem)
                     // Recusa do servidor: dia cheio, texto longo demais, linha
                     // que ja nao existe. Repetir nao muda a resposta, e manter
                     // na fila travaria tudo o que vem depois. Some a pendencia;
@@ -121,6 +129,31 @@ class Sincronizador(private val context: Context) {
                 }
             }
         }
+    }
+
+    /**
+     * O erro passa sozinho? Entao a escrita fica na fila e a drenagem para.
+     *
+     * Sem resposta (rede fora), 5xx (deploy ou restart no Render), 3xx (a API
+     * nunca redireciona: e configuracao errada no caminho, que se conserta),
+     * 408 e 429 (pedido lento, freio) nao dizem nada sobre a escrita -- dizem
+     * que agora nao deu. Antes so a rede fora contava, e um 503 no meio de um
+     * deploy APAGAVA a escrita e a linha provisoria, sem aviso nenhum.
+     *
+     * **Sem prazo para desistir.** Chegou a haver um (sete dias de 5xx e a
+     * escrita saia), e foi tirado: e perder dado da pessoa por culpa do
+     * servidor. Um 5xx que nunca passa e defeito do servidor, e o conserto
+     * dele destrava a fila -- enquanto isso tudo continua no aparelho, na tela,
+     * esperando. Esperar e ruim; perder e pior.
+     */
+    private suspend fun passageiro(r: Api.Resultado.Erro, p: PendenciaEntity): Boolean {
+        val codigo = r.codigo ?: return true
+        if (codigo in 500..599) {
+            // So anota, para o perfil poder contar. Nao muda o destino dela.
+            banco.pendencias().marcarFalha(p.id, System.currentTimeMillis())
+            return true
+        }
+        return codigo == 408 || codigo == 429 || codigo in 300..399
     }
 
     /**
@@ -296,15 +329,6 @@ class Sincronizador(private val context: Context) {
         const val ALVO_BLOCOS = "blocos"
         const val ALVO_EVENTOS = "eventos"
 
-        /**
-         * O inicio da mensagem que [Api] usa para falha de rede.
-         *
-         * Comparar texto e fragil, mas a alternativa era vazar o tipo da
-         * excecao ate aqui. Se esta mensagem mudar em Api.kt, a fila para de
-         * distinguir rede fora de recusa do servidor -- e passa a descartar
-         * escritas que so precisavam de outra tentativa.
-         */
-        const val PREFIXO_REDE_FORA = "Não foi possível falar"
     }
 }
 

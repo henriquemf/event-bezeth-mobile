@@ -34,6 +34,7 @@ import com.beazeth.notifier.ui.componentes.BotaoPilula
 import com.beazeth.notifier.ui.componentes.BotaoPrimario
 import com.beazeth.notifier.ui.componentes.CampoDoce
 import com.beazeth.notifier.ui.componentes.CartaoDaTela
+import com.beazeth.notifier.ui.componentes.DialogoDePendentes
 import com.beazeth.notifier.ui.componentes.FotoDePerfil
 import com.beazeth.notifier.ui.theme.Doce
 import com.beazeth.notifier.ui.theme.Espaco
@@ -72,6 +73,7 @@ fun PerfilScreen(
     val nomeGuardado by vm.nomeLocal.collectAsState()
     val pendentes by vm.pendencias.collectAsState()
     val ultima by vm.ultimaSync.collectAsState()
+    val falhandoDesde by vm.servidorFalhandoDesde.collectAsState()
 
     val nomeAtual = if (local) nomeGuardado else nome
 
@@ -292,10 +294,16 @@ fun PerfilScreen(
                     valor = ultima?.replace("T", " ")?.take(16) ?: "ainda não",
                 )
                 Text(
-                    text = if (pendentes == 0) {
-                        "Tudo o que você escreveu já está no servidor."
-                    } else {
-                        "Escrito no aparelho. Sobe sozinho quando houver rede."
+                    text = when {
+                        pendentes == 0 -> "Tudo o que você escreveu já está no servidor."
+                        // A verdade inteira: o problema e do servidor, e nada
+                        // se perde enquanto ele nao volta.
+                        falhandoDesde != null ->
+                            "O servidor está com problema desde " +
+                                java.text.SimpleDateFormat("dd/MM 'às' HH:mm", java.util.Locale("pt", "BR"))
+                                    .format(java.util.Date(falhandoDesde!!)) +
+                                ". Nada foi perdido: o que você escreveu fica no aparelho e sobe quando ele voltar."
+                        else -> "Escrito no aparelho. Sobe sozinho quando houver rede."
                     },
                     style = TipografiaBeazeth.bodyMedium,
                     color = cores.tintaSuave,
@@ -309,10 +317,25 @@ fun PerfilScreen(
 
         // ------------------------------------------------------------- a saida
         item {
+            // Sair limpa o banco do aparelho. O que ja subiu esta no servidor;
+            // o que esta na fila nao, e so sai com a pessoa sabendo. Sem conta
+            // nao ha fila nem limpeza ("Entrar numa conta" nao apaga nada).
+            var confirmarSaida by rememberSaveable { mutableStateOf(false) }
+            if (confirmarSaida) {
+                DialogoDePendentes(
+                    alteracoes = pendentes,
+                    email = email,
+                    acao = "Sair da conta",
+                    caminhoSeguro = "Para não perder nada: volte, toque em Sincronizar agora com internet " +
+                        "e espere \"Esperando para subir\" ficar em nada. Depois é só sair.",
+                    aoApagar = { confirmarSaida = false; aoSair() },
+                    aoVoltar = { confirmarSaida = false },
+                )
+            }
             CartaoDaTela {
                 BotaoPrimario(
                     texto = if (local) "Entrar numa conta" else "Sair da conta",
-                    aoTocar = aoSair,
+                    aoTocar = { if (!local && pendentes > 0) confirmarSaida = true else aoSair() },
                 )
                 Text(
                     text = if (local) {

@@ -30,6 +30,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.ui.CascaApp
 import com.beazeth.notifier.ui.CriarContaScreen
+import com.beazeth.notifier.ui.componentes.DialogoDePendentes
 import com.beazeth.notifier.ui.LoginScreen
 import com.beazeth.notifier.ui.Sessao
 import com.beazeth.notifier.ui.SessaoViewModel
@@ -225,7 +226,19 @@ private fun App(
         // nao dois destinos de navegacao. Um estado local basta -- um NavHost
         // aqui so acrescentaria pilha de historico para duas telas que se
         // alternam.
-        Sessao.Fora -> if (cadastrando) {
+        Sessao.Fora -> {
+            login.descarte?.let { descarte ->
+                DialogoDePendentes(
+                    alteracoes = descarte.alteracoes,
+                    email = descarte.emailAnterior,
+                    acao = "Entrar com outra conta",
+                    caminhoSeguro = "Para não perder nada: volte, entre com a conta anterior e " +
+                        "espere sincronizar. Depois é só sair e entrar com a nova.",
+                    aoApagar = vm::confirmarDescarte,
+                    aoVoltar = vm::cancelarDescarte,
+                )
+            }
+            if (cadastrando) {
             CriarContaScreen(
                 estado = login,
                 aoCriar = vm::criarConta,
@@ -239,6 +252,7 @@ private fun App(
                 aoIrParaCadastro = { cadastrando = true; vm.limparErro() },
                 aoUsarSemConta = vm::usarSemConta,
             )
+        }
         }
         is Sessao.Dentro -> CascaApp(
             nome = s.nome,

@@ -10,6 +10,7 @@ import com.beazeth.notifier.data.Perfil
 import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.data.TokenStore
 import com.beazeth.notifier.data.fluxoDeEstatisticas
+import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +59,9 @@ class PerfilViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     val ultimaSync = guardaToken.ultimaSync
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val servidorFalhandoDesde = repo.servidorFalhandoDesde()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // ---------------------------------------------------------------- a foto
@@ -191,7 +195,14 @@ class PerfilViewModel(app: Application) : AndroidViewModel(app) {
                 if (conta == null) {
                     EstadoDoPerfil(erro = "Resposta incompleta do servidor.", campo = campo)
                 } else {
-                    guardaToken.guardarConta(conta.nome, conta.email)
+                    // Trocar a senha derruba todo token anterior, este incluso:
+                    // o novo vem na resposta, e sem guarda-lo o aparelho cairia
+                    // no proximo pedido. Guardado antes de qualquer outra coisa.
+                    r.corpo.token?.let { novo ->
+                        guardaToken.trocarToken(novo)
+                        SyncWorker.agora(getApplication())
+                    }
+                    guardaToken.guardarConta(conta.nome, conta.email, conta.id)
                     aoMudar(conta.nome, conta.email)
                     EstadoDoPerfil(recado = recado, campo = campo)
                 }

@@ -1,12 +1,16 @@
 package com.beazeth.notifier.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 /**
@@ -16,17 +20,36 @@ import kotlinx.coroutines.flow.map
  * thread da interface. Parece detalhe, mas esta leitura acontece na abertura,
  * exatamente quando a primeira tela esta sendo montada.
  *
- * O token vale noventa dias e nao da acesso a nada alem desta conta. Guardar em
- * texto claro aqui e o mesmo nivel de protecao do cookie de sessao no
- * navegador: quem tiver o aparelho desbloqueado ja esta dentro do app de
- * qualquer forma. Se um dia isto guardar algo mais sensivel, o lugar passa a
- * ser o EncryptedSharedPreferences.
+ * O token vale noventa dias e abre a conta inteira, por isso vai CIFRADO, com
+ * uma chave do Android Keystore -- ver [Cofre]. Nome e e-mail ficam em claro:
+ * a lateral os mostra, e sem o token eles nao abrem nada.
  */
 private val Context.dataStore by preferencesDataStore(name = "sessao")
 
 class TokenStore(private val context: Context) {
 
-    private val chaveToken = stringPreferencesKey("token")
+    /** O token de antes do [Cofre], em texto claro. So e lido para migrar. */
+    private val chaveTokenEmClaro = stringPreferencesKey("token")
+    private val chaveToken = stringPreferencesKey("token_cifrado")
+
+    /**
+     * De quem sao os dados que estao no banco do aparelho.
+     *
+     * Sobrevive a queda da sessao de proposito (ver [sessaoCaiu]): e com ele que
+     * o proximo login decide se o que esta no aparelho e dele -- e fica, com a
+     * fila e tudo -- ou de outra conta, e sai antes de ele ver.
+     */
+    private val chaveConta = longPreferencesKey("conta_id")
+
+    /**
+     * O e-mail da conta dona dos dados, guardado quando a sessao cai.
+     *
+     * Serve a duas coisas: e o que a tela de login mostra ao avisar que ha
+     * alteracoes dessa conta esperando para subir, e e a identidade dos dados
+     * no aparelho que veio da versao anterior e caiu da sessao antes de saber
+     * o [chaveConta].
+     */
+    private val chaveEmailDosDados = stringPreferencesKey("email_dos_dados")
     private val chaveNome = stringPreferencesKey("nome")
     private val chaveEmail = stringPreferencesKey("email")
     private val chaveSync = stringPreferencesKey("ultima_sync")
@@ -50,8 +73,18 @@ class TokenStore(private val context: Context) {
         context.dataStore.edit { it[chaveLocal] = true }
     }
 
-    /** O token guardado, ou `null` se ninguem entrou ainda. */
-    val token: Flow<String?> = context.dataStore.data.map { it[chaveToken] }
+    /**
+     * O token guardado, ou `null` se ninguem entrou ainda.
+     *
+     * O token em claro de uma versao anterior tambem vale, para ninguem ser
+     * deslogado pela atualizacao; [tokenAtual] o cifra na primeira leitura.
+     */
+    val token: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[chaveToken]?.let(Cofre::decifrar) ?: prefs[chaveTokenEmClaro]
+    }
+        // Decifrar vai ao Keystore, uma chamada entre processos: fora da
+        // thread da interface, que e de onde a abertura do app pergunta.
+        .flowOn(Dispatchers.IO)
 
     /** Nome de quem entrou, para a interface saudar sem esperar a rede. */
     val nome: Flow<String?> = context.dataStore.data.map { it[chaveNome] }
@@ -65,7 +98,49 @@ class TokenStore(private val context: Context) {
      */
     val email: Flow<String?> = context.dataStore.data.map { it[chaveEmail] }
 
-    suspend fun tokenAtual(): String? = token.first()
+    suspend fun tokenAtual(): String? {
+        if (context.dataStore.data.first()[chaveTokenEmClaro] != null) {
+            // Dentro do MESMO edit que le: entre ler e gravar em dois passos,
+            // um token novo gravado no meio seria sobrescrito pelo antigo.
+            context.dataStore.edit { prefs ->
+                prefs[chaveTokenEmClaro]?.let { gravarToken(prefs, it) }
+            }
+        }
+        return token.first()
+    }
+
+    /** A conta dona dos dados do aparelho: o id, ou so o e-mail, se e o que ha. */
+    suspend fun contaDosDados(): Long? = context.dataStore.data.first()[chaveConta]
+
+    suspend fun emailDosDados(): String? = context.dataStore.data.first()[chaveEmailDosDados]
+
+    /**
+     * Grava o token, cifrado. Se o Keystore recusar -- aparelho com o
+     * armazenamento de chaves quebrado --, guarda como antes, em claro: perder
+     * o login seria pior que o nivel de protecao de todas as versoes
+     * anteriores.
+     */
+    private fun gravarToken(prefs: MutablePreferences, token: String) {
+        val cifrado = Cofre.cifrar(token)
+        if (cifrado != null) {
+            prefs[chaveToken] = cifrado
+            prefs.remove(chaveTokenEmClaro)
+        } else {
+            prefs[chaveTokenEmClaro] = token
+            prefs.remove(chaveToken)
+        }
+    }
+
+    /**
+     * Troca so o token -- a senha foi trocada neste aparelho.
+     *
+     * A troca de senha derruba todo token anterior, inclusive o que fez o
+     * pedido; o servidor devolve um novo na mesma resposta, e e ele que segura
+     * este aparelho dentro.
+     */
+    suspend fun trocarToken(token: String) {
+        context.dataStore.edit { gravarToken(it, token) }
+    }
 
     suspend fun nomeAtual(): String? = nome.first()
 
@@ -89,9 +164,15 @@ class TokenStore(private val context: Context) {
         context.dataStore.edit { it[chaveSync] = instante }
     }
 
-    suspend fun guardar(token: String, nome: String, email: String) {
+    suspend fun guardar(token: String, nome: String, email: String, contaId: Long) {
         context.dataStore.edit {
-            it[chaveToken] = token
+            // Outra conta: o carimbo da sincronizacao era da anterior, e com ele
+            // a conta nova so baixaria o que mudou "desde entao" -- nunca o que
+            // ja tinha. Sem carimbo, a primeira conversa traz tudo.
+            if (it[chaveConta] != null && it[chaveConta] != contaId) it.remove(chaveSync)
+            it.remove(chaveEmailDosDados)
+            gravarToken(it, token)
+            it[chaveConta] = contaId
             it[chaveNome] = nome
             it[chaveEmail] = email
             // Entrar numa conta encerra o modo local, sempre. Deixar a marca
@@ -108,19 +189,38 @@ class TokenStore(private val context: Context) {
      * nome pode ter mudado no site desde o ultimo login, e a lateral mostra
      * este valor em toda tela.
      */
-    suspend fun guardarConta(nome: String, email: String) {
+    suspend fun guardarConta(nome: String, email: String, contaId: Long) {
         context.dataStore.edit {
             it[chaveNome] = nome
             it[chaveEmail] = email
+            // Refeito a cada `/api/me`: e assim que um aparelho que entrou antes
+            // desta chave existir passa a saber de quem sao os seus dados.
+            it[chaveConta] = contaId
         }
     }
 
     /**
-     * Apaga a sessao.
+     * A sessao caiu (401): token vencido, senha trocada noutro aparelho.
      *
-     * Chamado ao sair e tambem quando a API responde 401: um token vencido no
-     * armazenamento nao serve para nada e faria toda abertura seguinte comecar
-     * por uma requisicao fadada a falhar.
+     * Vai tudo menos [chaveConta]. Os dados do aparelho ficam -- podem ter
+     * escritas na fila que ainda nao subiram --, e a conta dona deles fica
+     * anotada para o proximo login decidir o que fazer com eles.
+     */
+    suspend fun sessaoCaiu() {
+        context.dataStore.edit { prefs ->
+            val conta = prefs[chaveConta]
+            val email = prefs[chaveEmail]
+            prefs.clear()
+            if (conta != null) prefs[chaveConta] = conta
+            if (email != null) prefs[chaveEmailDosDados] = email
+        }
+    }
+
+    /**
+     * Apaga a sessao inteira -- sair de verdade.
+     *
+     * Os dados do aparelho saem junto (ver `SessaoViewModel.sair`), entao a
+     * conta dona deles tambem.
      */
     suspend fun limpar() {
         context.dataStore.edit { it.clear() }

@@ -135,6 +135,15 @@ data class PendenciaEntity(
     /** Qual tabela local a resposta deve atualizar. */
     val entidade: String,
     val criadoEm: Long,
+    /**
+     * Desde quando o servidor responde erro DELE (5xx) a esta escrita, ou
+     * `null` se nunca respondeu.
+     *
+     * Nao decide nada sobre a escrita -- ela espera o tempo que for preciso, e
+     * nunca e descartada por isso. Serve para o perfil dizer a verdade: "o
+     * servidor esta com problema desde tal hora, e nada foi perdido".
+     */
+    val falhandoDesde: Long? = null,
 )
 
 /**

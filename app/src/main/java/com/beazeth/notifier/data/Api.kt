@@ -39,15 +39,39 @@ object Api {
         // que alguem abre o app no dia.
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        // Teto da chamada INTEIRA. Os dois de cima sao por etapa, e um
+        // servidor que pingasse um byte a cada 29 segundos seguraria a
+        // chamada -- e a fila atras dela -- para sempre.
+        .callTimeout(90, TimeUnit.SECONDS)
+        // A API nunca redireciona. Um 3xx so pode ser configuracao errada, ou
+        // alguem no meio do caminho, e segui-lo levaria senha e escrita para
+        // onde nao deviam: vira erro, e a fila o trata como passageiro -- a
+        // escrita espera o caminho ser consertado (ver `Sincronizador`).
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
     private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
 
+    /** Ver [Resultado.Erro.codigo]. */
+    const val SEM_HTTP = 0
+
     /** Resultado de uma chamada: ou o corpo, ou o motivo de ter falhado. */
     sealed interface Resultado<out T> {
         data class Ok<T>(val corpo: T) : Resultado<T>
-        /** `semSessao` separa "seu token venceu" de "a rede caiu". */
-        data class Erro(val mensagem: String, val semSessao: Boolean = false) : Resultado<Nothing>
+        /**
+         * `semSessao` separa "seu token venceu" de "a rede caiu".
+         *
+         * [codigo] e o status HTTP, `null` quando nem houve resposta (sem
+         * rede, servidor dormindo) e [SEM_HTTP] quando houve resposta mas ela
+         * nao fazia sentido. E o que a fila usa para decidir entre tentar de
+         * novo e desistir -- e nao o texto da mensagem.
+         */
+        data class Erro(
+            val mensagem: String,
+            val semSessao: Boolean = false,
+            val codigo: Int? = null,
+        ) : Resultado<Nothing>
     }
 
     @Serializable
@@ -65,11 +89,17 @@ object Api {
         val message: String? = null,
     )
 
+    /**
+     * `token` so vem quando a senha foi trocada: a troca derruba todo token
+     * anterior (inclusive o que fez o pedido), e este e o que mantem ESTE
+     * aparelho dentro. Ver `PATCH /api/me` no servidor.
+     */
     @Serializable
     data class RespostaConta(
         val ok: Boolean = false,
         val user: Conta? = null,
         val message: String? = null,
+        val token: String? = null,
     )
 
     suspend fun entrar(email: String, senha: String): Resultado<RespostaLogin> =
@@ -233,11 +263,13 @@ object Api {
                     return@withContext Resultado.Erro(
                         mensagem = mensagemDoCorpo(texto) ?: "Sua sessão expirou.",
                         semSessao = true,
+                        codigo = 401,
                     )
                 }
                 if (!resposta.isSuccessful) {
                     return@withContext Resultado.Erro(
                         mensagemDoCorpo(texto) ?: "O servidor respondeu ${resposta.code}.",
+                        codigo = resposta.code,
                     )
                 }
                 Resultado.Ok(desserializar(texto))
@@ -247,7 +279,9 @@ object Api {
             // pessoa, nao para o log: ela nao pode fazer nada com um stack trace.
             Resultado.Erro("Não foi possível falar com o servidor. Verifique a conexão.")
         } catch (e: Exception) {
-            Resultado.Erro("Resposta inesperada do servidor.")
+            // Nao e rede fora: repetir daria o mesmo. Sem codigo nenhum, a
+            // fila tomaria por rede fora e tentaria para sempre.
+            Resultado.Erro("Resposta inesperada do servidor.", codigo = SEM_HTTP)
         }
     }
 

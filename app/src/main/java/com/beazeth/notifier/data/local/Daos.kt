@@ -247,6 +247,14 @@ interface PendenciaDao {
     @Delete
     suspend fun remover(p: PendenciaEntity)
 
+    /** Marca o inicio do erro do servidor, se ainda nao estava marcado. */
+    @Query("UPDATE pendencias SET falhandoDesde = :em WHERE id = :id AND falhandoDesde IS NULL")
+    suspend fun marcarFalha(id: Long, em: Long)
+
+    /** Desde quando a fila esta parada por erro do servidor, se estiver. */
+    @Query("SELECT MIN(falhandoDesde) FROM pendencias")
+    fun servidorFalhandoDesde(): Flow<Long?>
+
     /**
      * Reescreve as pendencias que ainda apontam para um id provisorio.
      *
