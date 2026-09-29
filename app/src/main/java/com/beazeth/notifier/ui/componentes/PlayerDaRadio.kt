@@ -70,9 +70,10 @@ import com.beazeth.notifier.ui.theme.TipografiaBeazeth
 
 /**
  * A radio lo-fi no canto da tela -- o mesmo player do site
- * (`partials/radio.html`), com as mesmas tres formas:
- * - parada: um botao redondo com o radinho, para nao tapar nada;
- * - tocando: a pilula com as ondas e o nome da musica;
+ * (`partials/radio.html`), com as mesmas duas formas:
+ * - a pilula, sempre a vista: a estacao e "toque para ouvir" quando parada,
+ *   as ondas e o nome da musica quando toca. Um botao so com o radinho nao
+ *   dizia o que era, e ninguem achava a radio;
  * - aberta: o cartao com estacoes, volume e o link da radio.
  *
  * O som nao mora aqui: e do `RadioService`. Sair da tela, trocar de aba ou
@@ -119,30 +120,34 @@ private fun Pilula(estado: EstadoDaRadio, aoAbrir: () -> Unit, aoAlternar: () ->
                 .clickable(onClickLabel = "Abrir a radio", role = Role.Button, onClick = aoAbrir)
                 .semantics { contentDescription = "Rádio lo-fi" }
                 .height(40.dp)
-                .padding(horizontal = if (estado.tocando) Espaco.e2 else 8.dp),
+                .padding(horizontal = Espaco.e2),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Espaco.e2),
         ) {
             if (estado.tocando) {
                 Ondas(tocando = true, cor = cores.destaque, altura = 16.dp)
-                Column(modifier = Modifier.widthIn(max = 170.dp)) {
-                    Text(
-                        text = estado.musica?.titulo ?: estado.estacao.nome,
-                        style = TipografiaBeazeth.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                        color = cores.tinta,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee(),
-                    )
-                    Text(
-                        text = estado.musica?.artista?.ifEmpty { null } ?: estado.estacao.nome,
-                        style = TipografiaBeazeth.bodySmall.copy(fontSize = 11.sp),
-                        color = cores.tintaSuave,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             } else {
                 Text("📻", fontSize = 19.sp)
+            }
+            Column(modifier = Modifier.widthIn(max = 170.dp)) {
+                Text(
+                    text = if (estado.tocando) estado.musica?.titulo ?: estado.estacao.nome else estado.estacao.nome,
+                    style = TipografiaBeazeth.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                    color = cores.tinta,
+                    maxLines = 1,
+                    modifier = Modifier.basicMarquee(),
+                )
+                Text(
+                    text = if (estado.tocando) {
+                        estado.musica?.artista?.ifEmpty { null } ?: estado.estacao.nome
+                    } else {
+                        "toque para ouvir"
+                    },
+                    style = TipografiaBeazeth.bodySmall.copy(fontSize = 11.sp),
+                    color = cores.tintaSuave,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         BotaoTocar(estado, tamanho = 40.dp, aoTocar = aoAlternar)
