@@ -8,6 +8,12 @@
          `MainActivity`, na primeira abertura. Ate o 12 basta declarar. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- A radio lo-fi toca num servico em primeiro plano, do tipo "midia": e
+         isso que a deixa seguir tocando com a tela apagada ou o app fechado,
+         com a notificacao de midia na barra. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <!-- Remarcar os alarmes depois de o aparelho religar. Sem isto, reiniciar o
          tablet apaga a tabela de alarmes do sistema e o app fica mudo ate
          alguem abri-lo. Ver `AoLigar`. -->
@@ -66,9 +72,14 @@
          a sessao de todo mundo.
 
          O que se perde desligando: nada. Restaurar o aparelho pede um login,
-         e a primeira sincronizacao traz tudo de volta. -->
+         e a primeira sincronizacao traz tudo de volta.
+
+         `dataExtractionRules` e a mesma decisao para o Android 12 em diante,
+         onde `allowBackup` sozinho deixa passar a transferencia de celular
+         para celular. -->
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/extracao_de_dados"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -113,6 +124,20 @@
         <receiver
             android:name=".avisos.Despertador"
             android:exported="false" />
+
+        <!-- A radio lo-fi. `exported="false"`: quem controla a radio e o
+             proprio app, e a notificacao, a tela de bloqueio e o botao do fone
+             falam com a sessao pelo token de midia do sistema, sem precisar
+             entrar pelo servico. O filtro de acao e o que a Media3 procura ao
+             se ligar a ele de dentro do app. -->
+        <service
+            android:name=".radio.RadioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <!-- Este precisa ser `exported="true"`, porque quem manda os quatro
              avisos e o SISTEMA, de fora do app. Os quatro sao "broadcasts

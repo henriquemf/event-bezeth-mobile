@@ -1,20 +1,26 @@
 package com.beazeth.notifier.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -23,6 +29,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -40,6 +47,8 @@ import com.beazeth.notifier.ui.componentes.Confete
 import com.beazeth.notifier.ui.componentes.BarraLateral
 import com.beazeth.notifier.ui.componentes.BarraSuperior
 import com.beazeth.notifier.ui.componentes.Destino
+import com.beazeth.notifier.ui.componentes.PlayerDaRadio
+import com.beazeth.notifier.radio.ControleDaRadio
 import com.beazeth.notifier.ui.telas.AguaScreen
 import com.beazeth.notifier.ui.telas.diario.DiarioScreen
 import com.beazeth.notifier.data.Preferencias
@@ -103,6 +112,14 @@ fun CascaApp(
     // -altura = escondida).
     var alturaDaBarra by remember { mutableIntStateOf(0) }
     var recolhida by remember { mutableFloatStateOf(0f) }
+
+    // A radio lo-fi do canto. Uma por casca: o som mora no servico, e isto so
+    // conversa com ele -- sair do app solta a conversa, nao a musica.
+    val escopoDaRadio = rememberCoroutineScope()
+    val radio = remember { ControleDaRadio(contexto.applicationContext, escopoDaRadio) }
+    DisposableEffect(radio) { onDispose { radio.soltar() } }
+    // A barra de baixo, medida: a radio fica logo acima dela.
+    var alturaDaBarraInferior by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(local) {
         // Ao abrir: puxa o que mudou desde a ultima vez e deixa a rede de
@@ -302,9 +319,24 @@ fun CascaApp(
         // A barra de baixo por ultimo, encostada na borda, porque e ela que a
         // pessoa toca. So existe onde nao coube a lateral.
         if (!lateralCabe) {
-            BarraInferior(atual = atual, aoTrocar = { nav.irPara(it) })
+            Box(modifier = Modifier.onSizeChanged { alturaDaBarraInferior = it.height }) {
+                BarraInferior(atual = atual, aoTrocar = { nav.irPara(it) })
+            }
         }
     }
+
+    // A radio, no canto, por cima do conteudo e acima da barra de baixo --
+    // o mesmo lugar do player no site.
+    val acimaDaBarra = with(LocalDensity.current) {
+        if (lateralCabe) 0.dp else alturaDaBarraInferior.toDp()
+    }
+    PlayerDaRadio(
+        controle = radio,
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .then(if (lateralCabe) Modifier.navigationBarsPadding() else Modifier)
+            .padding(end = 14.dp, bottom = acimaDaBarra + 14.dp),
+    )
 
     // Por cima de tudo, inclusive das barras: confete que passa por tras do
     // menu nao e confete. Nao intercepta toque nenhum -- e um `Canvas` sem

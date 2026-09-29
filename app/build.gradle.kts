@@ -29,8 +29,8 @@ android {
         // aparece nos ajustes, e e para gente ler.
         //
         // `empacotar.ps1 -Versao x.y.z` mexe nos dois de uma vez.
-        versionCode = 16
-        versionName = "1.10.0"
+        versionCode = 18
+        versionName = "1.12.0"
     }
 
     // ------------------------------------------------------------ assinatura
@@ -158,4 +158,7 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.work.runtime.ktx)
+
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
 }

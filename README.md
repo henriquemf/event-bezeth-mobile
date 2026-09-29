@@ -42,6 +42,7 @@ tem: a de perfil.
 | **Beber água** | O copo d'água do site, enchendo até a fração do dia, o quanto em copos e em ml, a fileira do dia com um copinho por copo da meta, e a hora do próximo lembrete. O dia é o do aparelho e zera à meia-noite. **O lembrete liga-se e ajusta-se aqui** — interruptor, intervalo, janela do dia, meta e tamanho do copo — e o que se muda sobe para o site na próxima sincronização. Avisa um intervalo depois do último copo (ou do último lembrete), dentro da janela escolhida — e para de avisar quando a meta do dia é batida. Embaixo, o histórico como o gráfico de contribuições do GitHub: um quadradinho por dia, mais escuro quanto mais perto da meta, com copos e litros ao toque. |
 | **Diário** | O ano inteiro em quadradinhos, um por dia — doze colunas de mês, trinta e uma linhas. Tocar num dia abre uma folha por baixo com os seis humores e o espaço de escrever; a cor pinta o quadradinho e um ponto marca "tem texto aqui". O que se digita desce para o banco a cada pausa, então fechar a folha com um arrasto não perde nada. |
 | **Aparência** | Dez paletas e dez fontes, e nada mais. Conta e sincronização saíram daqui para o perfil; o modo escuro é a lua da barra de cima, que está em todas as telas. |
+| **Rádio lo-fi** | No canto de toda tela: um 📻 quando parada, a pílula com as ondas e o nome da música quando toca, e um cartão com quatro estações (Lo-fi, Chillhop, Hotmix Lo-Fi, Study), volume e o link da rádio. Continua tocando com a tela apagada e o app fechado, com a música na notificação e na tela de bloqueio; o botão do fone pausa, e tirar o fone também. Funciona sem conta. |
 | **Perfil** | Foto (escolhida pela galeria, cortada no quadrado e guardada no aparelho), nome de exibição, e-mail e senha. Os números do que já se acumulou — copos, tarefas riscadas, pomodoros, post-its, eventos, blocos — com as frases que eles permitem ("você passou 3 h 40 min focando"). Os avisos: quais existem, com que som (com botão de ouvir), e o que a tela bloqueada mostra. No fim, a sincronização e a saída da conta. |
 
 A **Agenda** também avisa: na hora do evento, e — nas tags de regra "curso" — 15
@@ -117,6 +118,68 @@ linha perdida na consulta seguinte, sem erro nenhum aparecer.
 Quem roda isso é o WorkManager, e não uma corrotina do ViewModel: o pedido
 sobrevive ao app ser fechado e à falta de rede. Dispara depois de toda escrita,
 ao abrir o app, e de hora em hora como rede de segurança.
+
+**Erro passageiro espera, sem prazo; recusa sai.** Sem resposta, 3xx, 5xx
+(deploy ou restart no Render), 408 e 429 deixam a escrita na fila e a drenagem
+para, e o WorkManager tenta de novo com espera crescente. Só um 4xx — o servidor
+dizendo que aquela escrita nunca vai entrar — tira a pendência. Antes, um 503 no
+meio de um deploy apagava a escrita e a linha provisória sem aviso. Chegou a
+haver um prazo (sete dias de 5xx e a escrita saía) e ele foi tirado: um 5xx que
+nunca passa é defeito do servidor, e o conserto dele destrava a fila. Esperar é
+ruim; perder o que a pessoa escreveu é pior.
+
+### A sessão e a conta dona dos dados
+
+**O token vai cifrado.** Uma chave AES do Android Keystore (`data/Cofre.kt`),
+que nunca sai do aparelho, cifra o token antes de ele entrar no DataStore. O
+armazenamento privado já barrava outro app, mas não quem lê o disco por fora —
+root, imagem forense, ou uma build de debug, que `adb shell run-as` abre sem
+root. O token em claro de uma versão anterior é cifrado na primeira leitura, e
+ninguém é deslogado pela atualização.
+
+**Trocar a senha derruba os outros aparelhos.** O servidor avança a "época" da
+conta e recusa todo token anterior; o aparelho que trocou recebe um token novo
+na mesma resposta e continua dentro.
+
+**Quando a sessão cai, os dados ficam — e a conta dona deles fica anotada.**
+Token vencido ou senha trocada noutro lugar dão 401, e aí só o token sai: o
+banco pode ter escrita na fila que não subiu. No login seguinte, se a conta é a
+mesma, nada se perde e a fila sobe. Se é **outra**, banco, fila e foto saem
+antes de ela ver qualquer coisa — sem isso ela veria o diário da anterior, e a
+fila, drenada com o token novo, gravaria as escritas da anterior na conta dela.
+
+**E nada sai sem perguntar.** O que já subiu está salvo no servidor, na conta
+anterior. O que ainda está na fila só existe no aparelho: com escrita pendente,
+a entrada para e um aviso diz quantas alterações e de qual conta, com o caminho
+que não perde nada (entrar antes com a conta anterior e deixar sincronizar). O
+botão em destaque é o que volta sem apagar; descartar pede um toque de
+propósito no botão que diz isso. **Sair da conta** faz a mesma pergunta quando
+há alteração esperando para subir.
+
+Nada disto sai do aparelho por backup: `allowBackup="false"` cobre até o
+Android 11, e `dataExtractionRules` fecha a transferência de celular para
+celular que o Android 12 em diante abre mesmo com ele.
+
+### A rádio
+
+O som é de um serviço (`radio/RadioService.kt`), e não da tela: rádio se ouve
+com a tela apagada. É a `MediaSessionService` da Media3, que põe o serviço em
+primeiro plano enquanto toca e desenha a notificação de mídia sozinha; o
+ExoPlayer cuida do foco de áudio (ligação para a rádio, aviso abaixa),
+de pausar quando o fone sai e de manter o Wi-Fi acordado.
+
+- **O nome da música vem do próprio stream** (ICY), lido pelo ExoPlayer: o app
+  não pergunta nada ao servidor, e por isso a rádio funciona sem conta. As
+  estações são as mesmas de `app/services/radio.py` no site.
+- **Trocar o nome não corta o som.** O item é substituído com o mesmo endereço,
+  o que a Media3 aplica sem recarregar o stream.
+- **Pausa longa fecha o stream.** Por 30 s a conexão fica aberta e voltar é
+  instantâneo; depois disso fecha -- é dado móvel numa rádio que ninguém ouve.
+- **Só o app e o sistema mandam na rádio.** O serviço não é exportado, e a
+  sessão recusa controlador que não seja o próprio app, a notificação ou quem o
+  sistema diz ser confiável (tela de bloqueio, Bluetooth, carro).
+- **Quem nunca toca não paga.** O player da tela só se liga ao serviço no
+  primeiro toque, ou na abertura se a rádio estava tocando.
 
 ### Sem conta
 
@@ -485,7 +548,12 @@ app/src/main/java/com/beazeth/notifier/
 │   ├── Repositorio.kt       o que as telas usam: lê do Room, escreve no Room, enfileira
 │   ├── Sincronizador.kt     sobe a fila, baixa o que mudou
 │   ├── Remapeamentos.kt     avisa a interface quando um id provisório vira definitivo
-│   ├── TokenStore.kt        token, nome, e-mail, carimbo de sync e a marca do modo local
+│   ├── TokenStore.kt        token (cifrado), conta dona dos dados, nome, e-mail, carimbo de sync e modo local
+│   ├── Cofre.kt             a chave do Android Keystore que cifra o token
+├── radio/
+│   ├── Estacoes.kt          as quatro estações (as mesmas do site) e o nome da música
+│   ├── RadioService.kt      o player, a sessão de mídia e quem pode mandar nela
+│   ├── ControleDaRadio.kt   a ponte entre a tela e o serviço
 │   ├── Perfil.kt            a foto (corte, giro e disco) e o nome de quem usa sem conta
 │   ├── Estatisticas.kt      as contas da tela de perfil, todas saindo do Room
 │   ├── Preferencias.kt      tema, fonte, modo escuro, estado do pomodoro e as marcas d'água dos avisos
