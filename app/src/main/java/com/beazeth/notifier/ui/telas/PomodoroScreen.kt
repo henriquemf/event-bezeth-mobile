@@ -34,6 +34,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.avisos.descansoDe
+import com.beazeth.notifier.data.PomodoroNaConta
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.segundosAte
 import com.beazeth.notifier.ui.componentes.Ampulheta
@@ -260,6 +261,7 @@ internal suspend fun alternarPomodoro(context: Context, prefs: Preferencias, ban
         prefs.marcarDescansoAte(0L)
         prefs.salvarPomodoro(minutos, 0L, minutos * 60)
         Lembretes.pomodoroMudou(context)
+        PomodoroNaConta.enviarPrincipal(context)
         return
     }
 
@@ -281,6 +283,8 @@ internal suspend fun alternarPomodoro(context: Context, prefs: Preferencias, ban
         prefs.salvarPomodoro(minutos, System.currentTimeMillis() + segundos * 1_000L, segundos)
     }
     Lembretes.pomodoroMudou(context)
+    // O pomodoro e da conta: comecar aqui comeca no site tambem.
+    PomodoroNaConta.enviarPrincipal(context)
 }
 
 /** Zerar, de volta ao tempo cheio. */
@@ -292,6 +296,7 @@ internal suspend fun zerarPomodoro(context: Context, prefs: Preferencias, banco:
     // Desmarca: sem isto o alarme do pomodoro que acabou de ser zerado
     // continuaria marcado e apitaria na hora em que ele TERIA terminado.
     Lembretes.pomodoroMudou(context)
+    PomodoroNaConta.enviarPrincipal(context)
 }
 
 class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
@@ -314,6 +319,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
      *  descanso, e quem le a escolha e a entrega, no instante do fim. */
     fun definirDescansoAutomatico(ligado: Boolean) = viewModelScope.launch {
         prefs.definirDescansoAutomatico(ligado)
+        PomodoroNaConta.enviarPrincipal(contexto)
     }
 
     /** Chamado quando a contagem chega a zero com a tela aberta. */
@@ -329,6 +335,7 @@ class PomodoroViewModel(app: Application) : AndroidViewModel(app) {
         // corresponde mais a nada. Arrastar o slider com uma contagem PAUSADA e
         // o caminho que chega aqui com um alarme velho para desmarcar.
         Lembretes.pomodoroMudou(contexto)
+        PomodoroNaConta.enviarPrincipal(contexto)
     }
 }
 

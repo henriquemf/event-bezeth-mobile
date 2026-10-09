@@ -47,6 +47,7 @@ class Preferencias(private val context: Context) {
     private val chavePomoFestejado = longPreferencesKey("pomo_festejado")
     private val chaveFesta = booleanPreferencesKey("festa_do_pomodoro")
     private val chaveDescansoAutomatico = booleanPreferencesKey("pomo_descanso_automatico")
+    private val chavePomoSemeado = booleanPreferencesKey("pomo_semeado")
     private val chaveAguaMarco = longPreferencesKey("agua_marco_em")
     private val chaveAguaProximo = longPreferencesKey("agua_proximo_em")
 
@@ -317,6 +318,31 @@ class Preferencias(private val context: Context) {
 
     suspend fun salvarSubs(lista: List<SubPomodoro>) {
         context.prefsAparencia.edit { it[chaveSubs] = escreverSubs(lista) }
+    }
+
+    /** Este aparelho ja conversou com a conta sobre pomodoros? Ver
+     *  `PomodoroNaConta.semear`. */
+    val pomoSemeado: Flow<Boolean> =
+        context.prefsAparencia.data.map { it[chavePomoSemeado] ?: false }
+
+    suspend fun marcarPomodoroSemeado() {
+        context.prefsAparencia.edit { it[chavePomoSemeado] = true }
+    }
+
+    /**
+     * Sai da conta (ou entra noutra): os pomodoros sao DELA, e ja estao no
+     * servidor. Parados e sem os outros dez, para a proxima conta nao herdar o
+     * relogio da anterior -- e a primeira sincronizacao traz os dela.
+     */
+    suspend fun esquecerPomodorosDaConta() {
+        context.prefsAparencia.edit {
+            val minutos = it[chavePomoMinutos] ?: 25
+            it[chavePomoFimEm] = 0L
+            it[chavePomoRestante] = minutos * 60
+            it[chavePomoDescansoAte] = 0L
+            it[chaveSubs] = escreverSubs(emptyList())
+            it[chavePomoSemeado] = false
+        }
     }
 
     suspend fun salvarPomodoro(minutos: Int, fimEm: Long, restante: Int) {

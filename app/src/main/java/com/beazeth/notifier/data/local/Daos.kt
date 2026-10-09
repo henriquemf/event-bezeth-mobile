@@ -250,6 +250,11 @@ interface PendenciaDao {
     @Delete
     suspend fun remover(p: PendenciaEntity)
 
+    /** Tira as escritas anteriores de um caminho cujo PUT leva o estado
+     *  inteiro: a mais nova torna as outras inuteis. */
+    @Query("DELETE FROM pendencias WHERE entidade = :entidade AND caminho = :caminho")
+    suspend fun descartar(entidade: String, caminho: String)
+
     /** Marca o inicio do erro do servidor, se ainda nao estava marcado. */
     @Query("UPDATE pendencias SET falhandoDesde = :em WHERE id = :id AND falhandoDesde IS NULL")
     suspend fun marcarFalha(id: Long, em: Long)

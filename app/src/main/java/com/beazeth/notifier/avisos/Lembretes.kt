@@ -342,8 +342,13 @@ object Lembretes {
         // resto daqui (credito, aviso) e igual: o foco acabou do mesmo jeito.
         // O contrario nunca vale -- quando o descanso acaba, nada recomeca;
         // voltar a focar e decisao de quem esta ali.
+        // Do instante em que o foco ACABOU, e nao de agora: o site calcula o
+        // mesmo descanso a partir do mesmo fim, e os dois chegam ao mesmo
+        // segundo sem precisar conversar (ver `PomodoroNaConta`). Alarme
+        // atrasado so encurta o descanso; se ele ja passou, a proxima rodada
+        // anuncia o fim dele.
         if (prefs.descansoAutomatico.first()) {
-            prefs.marcarDescansoAte(agora + descansoDe(minutos) * 60_000L)
+            prefs.marcarDescansoAte(fimEm + descansoDe(minutos) * 60_000L)
         }
 
         // Depois de creditar, e nao antes: o pomodoro entra na conta do perfil
@@ -489,7 +494,8 @@ object Lembretes {
             sub.copy(
                 avisado = sub.fimEm,
                 creditado = sub.fimEm,
-                descansoAte = if (descansar) agora + descansoDe(sub.minutos) * 60_000L else 0L,
+                // Do fim do foco, como o principal -- e como o site.
+                descansoAte = if (descansar) sub.fimEm + descansoDe(sub.minutos) * 60_000L else 0L,
             )
         }
 

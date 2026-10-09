@@ -280,6 +280,9 @@ class Sincronizador(private val context: Context) {
             is Api.Resultado.Ok -> {
                 aplicar(r.corpo)
                 r.corpo.account?.let { guardaToken.guardarConta(it.nome, it.email, it.id) }
+                // A primeira conversa sobre pomodoros le a conta inteira. Sem
+                // rede no meio, fica para a proxima volta.
+                PomodoroNaConta.semear(context, token)
                 // So guarda o carimbo depois de gravar tudo. Se o processo
                 // morrer no meio, a proxima chamada repete a mesma janela --
                 // e repetir e inofensivo, porque grava por id. Guardar antes
@@ -327,6 +330,12 @@ class Sincronizador(private val context: Context) {
         // total de la e menor, e gravar por cima "desbeberia" o copo.
         if (m.hydrationIntake.isNotEmpty() && !aguaNaFila) {
             banco.agua().gravar(m.hydrationIntake.map { it.paraEntidade() })
+        }
+        val pomodorosApagados = resposta.deleted.filter { it.entity == "pomodoros" }.map { it.id }
+        if (m.pomodoros.isNotEmpty() || pomodorosApagados.isNotEmpty()) {
+            PomodoroNaConta.aplicar(context, m.pomodoros, pomodorosApagados) { id ->
+                devendo(PomodoroNaConta.ALVO, id)
+            }
         }
         val dias = m.diaryEntries.filter { !devendo(Repositorio.ALVO_DIARIO, it.day) }
         if (dias.isNotEmpty()) banco.diario().gravar(dias.map { it.paraEntidade() })

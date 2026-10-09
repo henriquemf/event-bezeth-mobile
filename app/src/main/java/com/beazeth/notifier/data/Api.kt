@@ -187,6 +187,21 @@ object Api {
         val message: String? = null,
     )
 
+    @Serializable
+    data class RespostaPomodoros(
+        val ok: Boolean = false,
+        val pomodoros: List<PomodoroJson> = emptyList(),
+        val message: String? = null,
+    )
+
+    /** Todos os pomodoros da conta. Ver `PomodoroNaConta.semear`. */
+    suspend fun pomodoros(token: String): Resultado<RespostaPomodoros> =
+        chamar(
+            caminho = "/api/pomodoro",
+            token = token,
+            desserializar = { json.decodeFromString(RespostaPomodoros.serializer(), it) },
+        )
+
     /** O contador de mudancas da conta. Ver `sync/AoVivo.kt`. */
     suspend fun versao(token: String): Resultado<RespostaVersao> =
         chamar(

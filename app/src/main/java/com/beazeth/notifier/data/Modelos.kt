@@ -40,6 +40,7 @@ data class Mudancas(
     val diaryEntries: List<DiarioJson> = emptyList(),
     /** `null` aqui significa "nao mudou", e nao "nao existe". */
     val hydrationSettings: ConfigAguaJson? = null,
+    val pomodoros: List<PomodoroJson> = emptyList(),
 )
 
 /** Uma lapide: `entity` e o nome da TABELA no Postgres, nao o do JSON. */

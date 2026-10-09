@@ -101,6 +101,23 @@ importam:
 - "obra única" do WorkManager é única **por nome**, então duas sincronizações
   podem rodar juntas; há uma tranca de processo para que não rodem.
 
+### O pomodoro é da conta
+
+Até a 1.13 ele só existia no DataStore, e o que se criava no PC nunca aparecia
+aqui. Agora `PomodoroNaConta` sobe cada **ação** pela fila: começar, pausar,
+pular o descanso, zerar, trocar o tempo, renomear, criar ou remover. O que muda
+no site desce pela sincronização. O relógio, o alarme, a festa e o descanso
+continuam aqui.
+
+**O descanso começa no fim do foco, e não quando o alarme tocou.** O site faz a
+mesma conta a partir do mesmo instante, e por isso nada que acontece sozinho
+precisa subir. O descanso pausado do site, que este app não tem, chega aqui
+como descanso encerrado.
+
+A primeira conversa lê a conta inteira e sobe os outros pomodoros que este
+aparelho já tinha. Sair da conta, ou entrar noutra, zera os pomodoros daqui, que
+já estão no servidor, para a próxima conta não herdar o relógio da anterior.
+
 ### A sincronização
 
 Duas metades, nesta ordem — e a ordem não é arbitrária:
@@ -216,7 +233,7 @@ instante do aviso**.
 
 Não foi o escolhido, porque o aparelho **já sabe tudo o que precisa para avisar
 sozinho**. A configuração de água (ligado, intervalo, janela) e a agenda inteira
-já estão no Room, trazidas pela sincronização, e o pomodoro nunca saiu daqui. Um
+já estão no Room, trazidas pela sincronização, e o relógio do pomodoro roda aqui. Um
 aviso local acerta com o celular em modo avião; um push dependeria de rede
 justamente no minuto em que ela pode faltar.
 

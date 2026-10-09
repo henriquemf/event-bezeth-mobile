@@ -38,6 +38,7 @@ import com.beazeth.notifier.avisos.Lembretes
 import com.beazeth.notifier.data.EstadoDoSub
 import com.beazeth.notifier.data.MAXIMO_DE_SUBS
 import com.beazeth.notifier.data.MAXIMO_DO_NOME_DO_SUB
+import com.beazeth.notifier.data.PomodoroNaConta
 import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.SubPomodoro
 import com.beazeth.notifier.data.agora
@@ -164,8 +165,10 @@ internal suspend fun criarSub(context: Context, prefs: Preferencias) {
     val lista = prefs.subsDoPomodoro.first()
     if (lista.size >= MAXIMO_DE_SUBS) return
     val minutos = prefs.pomoMinutos.first()
-    prefs.salvarSubs(lista + SubPomodoro(id = novoIdDeSub(), minutos = minutos))
+    val novo = SubPomodoro(id = novoIdDeSub(), minutos = minutos)
+    prefs.salvarSubs(lista + novo)
     Lembretes.subsMudaram(context)
+    PomodoroNaConta.enviarSub(context, novo.id)
 }
 
 internal suspend fun removerSub(context: Context, prefs: Preferencias, id: String) {
@@ -174,6 +177,7 @@ internal suspend fun removerSub(context: Context, prefs: Preferencias, id: Strin
     // pe e acordaria o aparelho para nao encontrar nada -- e o aviso dele
     // ficaria na barra falando de um cartao que nao existe mais.
     Lembretes.subsMudaram(context, id)
+    PomodoroNaConta.enviarSub(context, id)
 }
 
 /** Começar / Pausar / Pular descanso, conforme o que estiver acontecendo. */
@@ -218,6 +222,7 @@ internal suspend fun alternarSub(
         }
     }
     Lembretes.subsMudaram(context, id)
+    PomodoroNaConta.enviarSub(context, id)
 }
 
 internal suspend fun zerarSub(
@@ -229,6 +234,7 @@ internal suspend fun zerarSub(
     creditarSubsTerminados(prefs, banco)
     mexer(prefs, id) { it.copy(fimEm = 0L, descansoAte = 0L, restante = it.minutos * 60) }
     Lembretes.subsMudaram(context, id)
+    PomodoroNaConta.enviarSub(context, id)
 }
 
 internal suspend fun definirMinutosDoSub(
@@ -244,10 +250,12 @@ internal suspend fun definirMinutosDoSub(
     // Trocar o tempo zera o instante do fim, entao o alarme que existia nao
     // corresponde mais a nada.
     Lembretes.subsMudaram(context, id)
+    PomodoroNaConta.enviarSub(context, id)
 }
 
-internal suspend fun renomearSub(prefs: Preferencias, id: String, nome: String) {
+internal suspend fun renomearSub(context: Context, prefs: Preferencias, id: String, nome: String) {
     mexer(prefs, id) { it.copy(nome = nome.take(MAXIMO_DO_NOME_DO_SUB)) }
+    PomodoroNaConta.enviarSub(context, id)
 }
 
 internal suspend fun dobrarSub(prefs: Preferencias, id: String, dobrado: Boolean) {
@@ -271,7 +279,8 @@ class SubsViewModel(app: Application) : AndroidViewModel(app) {
     fun remover(id: String) = viewModelScope.launch { removerSub(contexto, prefs, id) }
     fun alternar(id: String) = viewModelScope.launch { alternarSub(contexto, prefs, banco, id) }
     fun zerar(id: String) = viewModelScope.launch { zerarSub(contexto, prefs, banco, id) }
-    fun renomear(id: String, nome: String) = viewModelScope.launch { renomearSub(prefs, id, nome) }
+    fun renomear(id: String, nome: String) =
+        viewModelScope.launch { renomearSub(contexto, prefs, id, nome) }
     fun dobrar(id: String, dobrado: Boolean) =
         viewModelScope.launch { dobrarSub(prefs, id, dobrado) }
 

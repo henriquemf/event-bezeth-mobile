@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.beazeth.notifier.data.Api
 import com.beazeth.notifier.data.Perfil
+import com.beazeth.notifier.data.Preferencias
 import com.beazeth.notifier.data.Repositorio
 import com.beazeth.notifier.data.TokenStore
 import com.beazeth.notifier.data.local.BancoLocal
@@ -223,6 +224,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
             SyncWorker.parar(getApplication())
             BancoLocal.limpar(getApplication())
             Perfil(getApplication()).removerFoto()
+            Preferencias(getApplication()).esquecerPomodorosDaConta()
         }
         val vinhaDoModoLocal = guardaToken.modoLocalAtivo()
         guardaToken.guardar(token, conta.nome, conta.email, conta.id)
@@ -301,6 +303,7 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
     fun sair() = viewModelScope.launch {
         SyncWorker.parar(getApplication())
         BancoLocal.limpar(getApplication())
+        Preferencias(getApplication()).esquecerPomodorosDaConta()
         guardaToken.limpar()
         // A foto e o nome escolhido saem junto. Sao o rosto de quem estava
         // dentro: deixa-los faria a proxima conta abrir com a cara da anterior
