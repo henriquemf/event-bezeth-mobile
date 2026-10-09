@@ -279,6 +279,7 @@ class Sincronizador(private val context: Context) {
 
             is Api.Resultado.Ok -> {
                 aplicar(r.corpo)
+                r.corpo.account?.let { guardaToken.guardarConta(it.nome, it.email, it.id) }
                 // So guarda o carimbo depois de gravar tudo. Se o processo
                 // morrer no meio, a proxima chamada repete a mesma janela --
                 // e repetir e inofensivo, porque grava por id. Guardar antes
@@ -289,17 +290,47 @@ class Sincronizador(private val context: Context) {
         }
     }
 
+    /**
+     * Grava o que veio do servidor -- menos o que o aparelho ainda deve a ele.
+     *
+     * A fila e drenada antes da descida, mas uma escrita feita NO MEIO da
+     * descida (a pessoa tocou em algo enquanto a resposta vinha) entra na fila
+     * depois da drenagem. Gravar por cima dela tiraria da tela o que acabou de
+     * ser feito ate a proxima volta -- e quem continuasse editando a partir dali
+     * editaria a versao velha. A linha pulada vem na proxima descida, depois de
+     * a escrita subir. E agora a descida roda a cada mudanca, com o app na
+     * frente: a janela deixou de ser rara.
+     *
+     * O post-it aberto para edicao nao precisa de regra aqui: o cartao nao
+     * recarrega o texto enquanto alguem escreve nele (ver `Postit`), e ao
+     * fechar manda o texto inteiro. Pular pelo carimbo seria pior -- duas
+     * edicoes no site dentro do mesmo segundo tem o mesmo carimbo, e a segunda
+     * nunca chegaria.
+     */
     private suspend fun aplicar(resposta: RespostaSync) {
         val m = resposta.changed
+        val naFila = banco.pendencias().todas()
+        fun devendo(entidade: String, chave: String) =
+            naFila.any { it.entidade == entidade && it.caminho.substringAfterLast('/') == chave }
+        val aguaNaFila = naFila.any { it.entidade == Repositorio.ALVO_AGUA }
 
-        if (m.notes.isNotEmpty()) banco.notas().gravar(m.notes.map { it.paraEntidade() })
-        if (m.todoItems.isNotEmpty()) banco.tarefas().gravar(m.todoItems.map { it.paraEntidade() })
-        if (m.plannerBlocks.isNotEmpty()) banco.blocos().gravar(m.plannerBlocks.map { it.paraEntidade() })
-        if (m.events.isNotEmpty()) banco.eventos().gravar(m.events.map { it.paraEntidade() })
+        val notas = m.notes.filter { !devendo(ALVO_NOTAS, it.id.toString()) }
+        if (notas.isNotEmpty()) banco.notas().gravar(notas.map { it.paraEntidade() })
+        val tarefas = m.todoItems.filter { !devendo(ALVO_TAREFAS, it.id.toString()) }
+        if (tarefas.isNotEmpty()) banco.tarefas().gravar(tarefas.map { it.paraEntidade() })
+        val blocos = m.plannerBlocks.filter { !devendo(ALVO_BLOCOS, it.id.toString()) }
+        if (blocos.isNotEmpty()) banco.blocos().gravar(blocos.map { it.paraEntidade() })
+        val eventos = m.events.filter { !devendo(ALVO_EVENTOS, it.id.toString()) }
+        if (eventos.isNotEmpty()) banco.eventos().gravar(eventos.map { it.paraEntidade() })
         if (m.tags.isNotEmpty()) banco.tags().gravar(m.tags.map { it.paraEntidade() })
-        if (m.hydrationIntake.isNotEmpty()) banco.agua().gravar(m.hydrationIntake.map { it.paraEntidade() })
-        if (m.diaryEntries.isNotEmpty()) banco.diario().gravar(m.diaryEntries.map { it.paraEntidade() })
-        m.hydrationSettings?.let { banco.agua().gravarConfig(it.paraEntidade()) }
+        // O copo daqui ja esta somado no aparelho e ainda nao no servidor: o
+        // total de la e menor, e gravar por cima "desbeberia" o copo.
+        if (m.hydrationIntake.isNotEmpty() && !aguaNaFila) {
+            banco.agua().gravar(m.hydrationIntake.map { it.paraEntidade() })
+        }
+        val dias = m.diaryEntries.filter { !devendo(Repositorio.ALVO_DIARIO, it.day) }
+        if (dias.isNotEmpty()) banco.diario().gravar(dias.map { it.paraEntidade() })
+        if (!aguaNaFila) m.hydrationSettings?.let { banco.agua().gravarConfig(it.paraEntidade()) }
 
         for (morto in resposta.deleted) {
             // `entity` e o nome da TABELA no Postgres, escrito pelo gatilho --

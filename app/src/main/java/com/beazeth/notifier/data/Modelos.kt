@@ -24,6 +24,8 @@ data class RespostaSync(
     val now: String? = null,
     val changed: Mudancas = Mudancas(),
     val deleted: List<Exclusao> = emptyList(),
+    /** Nome e e-mail de agora: trocados no site, chegam por aqui. */
+    val account: Api.Conta? = null,
     val message: String? = null,
 )
 

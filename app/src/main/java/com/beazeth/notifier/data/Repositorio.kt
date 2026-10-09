@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.Duration
@@ -601,10 +602,12 @@ class Repositorio(private val context: Context) {
      * trocar o id negativo pelo do servidor e reescrever a fila -- e o mesmo
      * caminho de qualquer post-it criado offline, so que em lote.
      *
-     * **Nao adota agua nem aparencia, e isso e deliberado.** Copos sao uma
-     * CONTAGEM do dia, nao uma criacao: somar a contagem local por cima da que
-     * a conta ja tem contaria o mesmo copo duas vezes. Tema e fonte ja moram no
-     * aparelho de proposito, e nunca subiram para conta nenhuma.
+     * **Agua sobe por outra porta.** Copos sao uma CONTAGEM do dia, nao uma
+     * criacao: somar a contagem local por cima da que a conta ja tem contaria
+     * o mesmo copo duas vezes. Ate a 1.12 ela ficava de fora, e o historico do
+     * modo local nunca chegava ao site; agora vai inteiro para
+     * `/api/hydration/historico`, onde cada dia fica com o MAIOR total entre o
+     * aparelho e a conta. Tema e fonte moram no aparelho de proposito.
      */
     suspend fun adotarDadosLocais() {
         for (nota in banco.notas().provisorios()) {
@@ -674,6 +677,25 @@ class Repositorio(private val context: Context) {
                     put("note", dia.note)
                 },
                 entidade = ALVO_DIARIO,
+            )
+        }
+
+        val agua = banco.agua().todos()
+        if (agua.isNotEmpty()) {
+            enfileirar(
+                metodo = "POST",
+                caminho = "/api/hydration/historico",
+                corpo = buildJsonObject {
+                    put("days", buildJsonArray {
+                        agua.forEach { dia ->
+                            add(buildJsonObject {
+                                put("day", dia.day)
+                                put("glasses", dia.glasses)
+                            })
+                        }
+                    })
+                },
+                entidade = ALVO_AGUA,
             )
         }
 

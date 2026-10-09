@@ -202,6 +202,9 @@ interface AguaDao {
     @Query("SELECT * FROM agua_dias WHERE day = :dia")
     suspend fun buscar(dia: String): AguaDiaEntity?
 
+    @Query("SELECT * FROM agua_dias WHERE glasses > 0 ORDER BY day ASC")
+    suspend fun todos(): List<AguaDiaEntity>
+
     /**
      * Quantos copos em cada dia, para a tela de perfil.
      *

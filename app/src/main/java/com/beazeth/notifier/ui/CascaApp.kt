@@ -36,6 +36,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import com.beazeth.notifier.sync.AoVivo
 import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.first
 import com.beazeth.notifier.avisos.Lembretes
@@ -121,17 +125,22 @@ fun CascaApp(
     // A barra de baixo, medida: a radio fica logo acima dela.
     var alturaDaBarraInferior by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(local) {
-        // Ao abrir: puxa o que mudou desde a ultima vez e deixa a rede de
-        // seguranca de hora em hora armada. Nenhum dos dois bloqueia a tela.
+    val ciclo = LocalLifecycleOwner.current
+    LaunchedEffect(local, ciclo) {
+        // Com o app na frente: o que muda no site aparece aqui em um ou dois
+        // segundos, e toda volta ao app puxa o que mudou enquanto ele estava
+        // fora (ver `AoVivo`). Em segundo plano fica so a rede de seguranca de
+        // hora em hora. Nenhum dos dois bloqueia a tela.
         //
         // Sem conta nao ha o que puxar nem para onde mandar. Agendar mesmo assim
         // acordaria o aparelho de hora em hora para uma tentativa que so pode
         // falhar -- bateria gasta para nada, num app que a pessoa escolheu usar
         // justamente sem depender de nada.
         if (!local) {
-            SyncWorker.agora(contexto)
             SyncWorker.periodico(contexto)
+            ciclo.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AoVivo.acompanhar(contexto)
+            }
         }
     }
 

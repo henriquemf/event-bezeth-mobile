@@ -180,6 +180,21 @@ object Api {
      * ja tinha, porque o piso dele e 1970 -- o mesmo valor que a migracao pos
      * como padrao nas colunas de carimbo.
      */
+    @Serializable
+    data class RespostaVersao(
+        val ok: Boolean = false,
+        val versao: Long? = null,
+        val message: String? = null,
+    )
+
+    /** O contador de mudancas da conta. Ver `sync/AoVivo.kt`. */
+    suspend fun versao(token: String): Resultado<RespostaVersao> =
+        chamar(
+            caminho = "/api/sync/versao",
+            token = token,
+            desserializar = { json.decodeFromString(RespostaVersao.serializer(), it) },
+        )
+
     suspend fun sincronizar(token: String, desde: String?): Resultado<RespostaSync> {
         val consulta = if (desde.isNullOrBlank()) "" else "?since=" + urlEncode(desde)
         return chamar(

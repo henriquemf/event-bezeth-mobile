@@ -12,6 +12,7 @@ import com.beazeth.notifier.sync.SyncWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -72,6 +73,25 @@ class SessaoViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         restaurar()
+        acompanharConta()
+    }
+
+    /**
+     * Nome e e-mail trocados no site (ou noutro aparelho) chegam pela
+     * sincronizacao, que os grava no [TokenStore]. A sessao era montada uma vez
+     * so, ao abrir: o nome novo ficava gravado e a tela continuava mostrando o
+     * velho ate o app ser fechado. Daqui ela acompanha o que estiver gravado.
+     */
+    private fun acompanharConta() = viewModelScope.launch {
+        combine(guardaToken.nome, guardaToken.email) { nome, email -> nome to email }
+            .collect { (nome, email) ->
+                val atual = _sessao.value
+                if (atual is Sessao.Dentro && nome != null && email != null &&
+                    (atual.nome != nome || atual.email != email)
+                ) {
+                    _sessao.value = Sessao.Dentro(nome, email)
+                }
+            }
     }
 
     /**

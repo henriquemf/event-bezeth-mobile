@@ -116,8 +116,20 @@ servidor, nunca do relógio do aparelho: qualquer diferença entre os dois virar
 linha perdida na consulta seguinte, sem erro nenhum aparecer.
 
 Quem roda isso é o WorkManager, e não uma corrotina do ViewModel: o pedido
-sobrevive ao app ser fechado e à falta de rede. Dispara depois de toda escrita,
-ao abrir o app, e de hora em hora como rede de segurança.
+sobrevive ao app ser fechado e à falta de rede. Dispara depois de toda escrita
+e de hora em hora como rede de segurança.
+
+**Com o app na frente, é ao vivo** (`sync/AoVivo.kt`). A cada 2 s o app
+pergunta o contador de mudanças da conta (`/api/sync/versao`), e quando ele
+muda roda a sincronização inteira. Toda volta ao app também sincroniza. O que
+se grava no site aparece aqui em um ou dois segundos. Até a 1.12, voltar ao app
+não puxava nada, e uma mudança feita no PC podia levar uma hora. Em segundo
+plano a consulta para, e fica só a obra de hora em hora.
+
+**A descida não passa por cima da fila.** Linha que ainda tem escrita na fila
+não é regravada com a versão do servidor; ela vem na volta seguinte, depois de
+a escrita subir. Copo de água na fila segura a água inteira, porque o total do
+servidor ainda não tem aquele copo.
 
 **Erro passageiro espera, sem prazo; recusa sai.** Sem resposta, 3xx, 5xx
 (deploy ou restart no Render), 408 e 429 deixam a escrita na fila e a drenagem
@@ -188,10 +200,12 @@ telas, as dez paletas —, sem login, sem servidor e sem rede. O que sai é a
 metade que fala com o mundo: a fila de envio não recebe nada e o worker nunca é
 agendado.
 
-E entrar numa conta depois **não perde nada**: post-its, tarefas, blocos e
-eventos escritos sem conta são enfileirados como criações e sobem. Copos de água
-e aparência ficam de fora de propósito — copos são uma contagem do dia, e somar a
-local por cima da que a conta já tem contaria o mesmo copo duas vezes.
+E entrar numa conta depois **não perde nada**: post-its, tarefas, blocos,
+eventos e dias do diário escritos sem conta sobem. Os copos de água também, por
+`/api/hydration/historico`. Ali cada dia fica com o **maior** total entre o
+aparelho e a conta, e não a soma: somar contaria duas vezes o mesmo copo. Até a
+1.12 a água ficava de fora, e o histórico do modo local nunca chegava ao site.
+A aparência continua do aparelho.
 
 ### Os avisos são do aparelho, não do servidor
 
